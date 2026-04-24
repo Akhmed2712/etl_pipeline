@@ -282,28 +282,7 @@ sbt assembly
 ### Run locally (dev)
 
 ```bash
-spark-submit \
-  --master local[*] \
-  --class etl_pipeline.Main \
-  target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
-  --env dev \
-  --catalog my_orders_job \
-  --resource my_orders_job \
-  --start_date 2024-01-15
-```
-
-### Run on a cluster (YARN / standalone)
-
-```bash
-spark-submit \
-  --master yarn \
-  --deploy-mode cluster \
-  --class etl_pipeline.Main \
-  target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
-  --env prod \
-  --catalog my_orders_job \
-  --resource my_orders_job \
-  --start_date 2024-01-15
+sudo bash run_spark.sh etl-pipeline-assembly-1.0.0.jar my_orders_job my_orders_job 2024-01-15
 ```
 
 ### CLI arguments
