@@ -107,7 +107,7 @@ my_orders_job:
 | Field | Required | Description |
 |---|---|---|
 | `credentials_key` | ✅ | Key in `credentials.yml` to use for JDBC auth |
-| `database` | ✅ | Database name appended to the JDBC URL |
+| `database` | ✅ | Destination database name |
 | `table` | ✅ | Destination table name |
 | `schema` | ✅ | Destination schema; combined as `schema.table` |
 | `script_type` | ✅ | `scala` (Scala object)
