@@ -213,7 +213,7 @@ Any valid `SparkConf` key can be added here. The engine passes all keys directly
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        spark-submit                         │
-│   --env dev  --catalog my_orders_job  --start_date 2024-…  │
+│   --env dev  --catalog my_orders_job  --start_date 2024-…   │
 └────────────────────────┬────────────────────────────────────┘
                          │
                     ┌────▼────┐
@@ -235,7 +235,7 @@ Any valid `SparkConf` key can be added here. The engine passes all keys directly
      └─────┬──────────────────────┘
            │
      ┌─────▼──────────────────────┐
-     │     MyOrdersJob.processData  │
+     │   MyOrdersJob.processData  │
      │  (reads read_conf, returns │
      │   a DataFrame)             │
      └─────┬──────────────────────┘
@@ -284,7 +284,7 @@ sbt assembly
 ```bash
 spark-submit \
   --master local[*] \
-  --class mypipeline.Main \
+  --class etl_pipeline.Main \
   target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
   --env dev \
   --catalog my_orders_job \
@@ -298,7 +298,7 @@ spark-submit \
 spark-submit \
   --master yarn \
   --deploy-mode cluster \
-  --class mypipeline.Main \
+  --class etl_pipeline.Main \
   target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
   --env prod \
   --catalog my_orders_job \
