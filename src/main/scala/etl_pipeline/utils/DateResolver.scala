@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 import scala.util.matching.Regex
+import scala.jdk.CollectionConverters._
 
 /**
  * DateResolver
@@ -40,14 +41,20 @@ object DateResolver {
 
   /** Recursively walk a catalog Map/List and resolve every string value. */
   def walk(node: Any, anchor: LocalDate): Any = node match {
+    case m: java.util.Map[_, _] =>                          // ← add this case
+      m.asInstanceOf[java.util.Map[String, Any]].asScala
+        .map { case (k, v) => k -> walk(v, anchor) }
+        .toMap
     case m: Map[_, _] =>
       m.asInstanceOf[Map[String, Any]].map { case (k, v) => k -> walk(v, anchor) }
+    case l: java.util.List[_] =>                            // ← add this case
+      l.asScala.map(item => walk(item, anchor)).toList
     case l: List[_] =>
       l.map(item => walk(item, anchor))
     case s: String =>
       resolveValue(s, anchor)
     case other =>
-      other // Int, Boolean, null — unchanged
+      other
   }
 
   /**

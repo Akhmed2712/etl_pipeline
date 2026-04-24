@@ -45,7 +45,7 @@ object MyOrdersJob extends Transformer {
     log.info(s"current_date=$currentDate | load_date=$loadDate | current_month=$currentMonth")
 
     // -- Read source table — filter already resolved -------------------------
-    val rejectConf = env("transaction_1").asInstanceOf[java.util.Map[String, Any]].asScala
+    val rejectConf = env("transaction_1").asInstanceOf[Map[String, Any]]
 
     val props = new java.util.Properties()
     jdbcConfig.props.foreach { case (k, v) => props.setProperty(k, v) }

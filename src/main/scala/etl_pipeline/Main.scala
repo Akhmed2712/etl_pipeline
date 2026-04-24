@@ -43,10 +43,10 @@ object Main {
     catalogConf: Map[String, Any],
     jdbcConfig: CredentialsLoader.JdbcConfig
   ): Unit = {
-    val writeConf = catalogConf("write_conf").asInstanceOf[java.util.Map[String, Any]].asScala
-    val options = Option(writeConf.get("options"))
-      .map(_.asInstanceOf[java.util.Map[String, Any]].asScala)
-      .getOrElse(scala.collection.mutable.Map.empty)
+    val writeConf = catalogConf("write_conf").asInstanceOf[Map[String, Any]]
+    val options: Map[String, Any] = writeConf.get("options")
+      .map(_.asInstanceOf[Map[String, Any]])
+      .getOrElse(Map.empty[String, Any])
 
     val schema = catalogConf.getOrElse("schema", "").toString
     val table = catalogConf("table").toString
@@ -107,7 +107,7 @@ object Main {
     jdbcConfig: CredentialsLoader.JdbcConfig
   ): Unit = {
     val readConf = catalogConf.getOrElse("read_conf", Map.empty[String, Any])
-      .asInstanceOf[java.util.Map[String, Any]].asScala.toMap
+      .asInstanceOf[Map[String, Any]]
 
     val scriptLocation = catalogConf.getOrElse("script_location", "")
       .toString.trim

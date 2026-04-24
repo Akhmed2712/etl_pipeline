@@ -61,7 +61,7 @@ my_orders_job:
   table: orders_summary # destination table
   schema: reporting # destination schema  →  reporting.orders_summary
   script_type: scala
-  script_location: setl_pipeline.scripts.my_orders_job.MyOrdersJob # to run
+  script_location: etl_pipeline.scripts.my_orders_job.MyOrdersJob # to run
 
   read_conf:
     # Scalar dates — resolved from --start_date at runtime
@@ -188,7 +188,7 @@ my_orders_job:
 | Field | Description |
 |---|---|
 | `spark.app.name` | Shown in Spark UI and logs |
-| `spark.executor.cores` | vCPUs per executor |
+| `spark.executor.cores` | CPUs per executor |
 | `spark.executor.memory` | RAM per executor (e.g. `1g`, `4g`) |
 | `spark.executor.instances` | Number of executors |
 | `spark.sql.shuffle.partitions` | Parallelism for shuffle operations (joins, groupBy) |
@@ -262,6 +262,7 @@ Any valid `SparkConf` key can be added here. The engine passes all keys directly
 
 ### Prerequisites
 
+- Docker
 - Java 17
 - Scala 2.13 + SBT
 - Apache Spark 3.3+ (`spark-submit` on PATH)
@@ -276,7 +277,7 @@ sbt test
 
 # Build fat jar (includes all dependencies except Spark)
 sbt assembly
-# → target/scala-2.13/etl_pipeline-assembly-1.0.0.jar
+# → target/scala-2.13/etl-pipeline-assembly-1.0.0.jar
 ```
 
 ### Run locally (dev)
@@ -310,6 +311,7 @@ cp credentials/credentials_example.yml credentials/credentials.yml
 mysqldev:
   host: localhost
   port: 3306
+  database: database
   user: myuser
   password: mypassword
   driver: com.mysql.cj.jdbc.Driver   # optional, this is the default
