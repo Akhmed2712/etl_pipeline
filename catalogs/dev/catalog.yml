@@ -1,11 +1,17 @@
-_mysql_conf: &mysql_conf
+_mysql_conf_dev: &mysql_conf_dev
   layer: mysql
   env: dev
   credentials_key: mysqldev    # matches key in credentials/credentials.yml
   database: transactions       # used to build jdbc_url: jdbc:mysql://host:port/<database>
 
+_mysql_conf_local: &mysql_conf_local
+  layer: mysql
+  env: dev
+  credentials_key: mysqllocal    # matches key in credentials/credentials.yml
+  database: farmagitechs     # used to build jdbc_url: jdbc:mysql://host:port/<database>
+
 my_orders_job:
-  <<: *mysql_conf
+  <<: *mysql_conf_local
   table: orders_summary        # destination table
   schema: reporting            # destination schema (schema.table)
   script_type: scala
@@ -17,7 +23,7 @@ my_orders_job:
     current_month: "{~~~%Y-%m-01:day=0~~~}"
 
     transaction_1:
-      database: simrs_rsatturots
+      database: farmagitechs
       table: dc_pendaftaran
       filter: "event_date = '{~~~%Y-%m-%d:day=1~~~}'"
 
@@ -42,6 +48,40 @@ my_orders_job:
         type: varchar(20)
       - column_name: load_ts
         type: timestamp
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+tes_pendaftaran:
+  <<: *mysql_conf_local
+  table: tes_pendaftaran
+  schema: farmagitechs
+  script_type: scala
+  script_location: etl_pipeline.scripts.tes_pendaftaran.TesPendaftaran
+
+  read_conf:
+    dc_pendaftaran:
+      database: farmagitechs
+      table: dc_pendaftaran
+      filter: "DATE(waktu_daftar) = '{~~~%Y-%m-%d:day=1~~~}'"
+
+  write_conf:
+    mode: overwrite
+    partition_date: "{~~~%Y-%m-%d:day=1~~~}"
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: id_pasien
+        type: bigint
+      - column_name: waktu_daftar
+        type: timestamp
+      - column_name: waktu_keluar
+        type: timestamp
+      - column_name: load_ts
+        type: timestamp
+      - column_name: partition_date
+        type: date
     options:
       batchsize: 1000
       numPartitions: 5

@@ -107,7 +107,7 @@ my_orders_job:
 | Field | Required | Description |
 |---|---|---|
 | `credentials_key` | ✅ | Key in `credentials.yml` to use for JDBC auth |
-| `database` | ✅ | Destination database name |
+| `database` | ✅ | Database name appended to the JDBC URL |
 | `table` | ✅ | Destination table name |
 | `schema` | ✅ | Destination schema; combined as `schema.table` |
 | `script_type` | ✅ | `scala` (Scala object)
@@ -338,7 +338,6 @@ cp credentials/credentials_example.yml credentials/credentials.yml
 mysqldev:
   host: localhost
   port: 3306
-  database: database
   user: myuser
   password: mypassword
   driver: com.mysql.cj.jdbc.Driver   # optional, this is the default

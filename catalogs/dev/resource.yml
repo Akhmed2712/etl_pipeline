@@ -28,3 +28,8 @@ my_orders_job:
   <<: *low
   spark.app.name: my_orders_job
   spark.sql.shuffle.partitions: 10
+
+tes_pendaftaran:
+  <<: *low
+  spark.app.name: my_orders_job
+  spark.sql.shuffle.partitions: 10
