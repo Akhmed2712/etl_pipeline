@@ -16,9 +16,9 @@ my_orders_job:
     load_date: "{~~~%Y-%m-%d:day=0~~~}"
     current_month: "{~~~%Y-%m-01:day=0~~~}"
 
-    usage_sa_opay_reject:
-      database: transactions
-      table: orders
+    transaction_1:
+      database: simrs_rsatturots
+      table: dc_pendaftaran
       filter: "event_date = '{~~~%Y-%m-%d:day=1~~~}'"
 
     orders_archive:

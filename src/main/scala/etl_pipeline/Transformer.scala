@@ -1,5 +1,6 @@
 package etl_pipeline
 
+import etl_pipeline.utils.CredentialsLoader
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /**
@@ -23,5 +24,5 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
  *   script_location: mypipeline.scripts.mynewjob.MyNewJob
  */
 trait Transformer {
-  def processData(spark: SparkSession, env: Map[String, Any]): DataFrame
+  def processData(spark: SparkSession, env: Map[String, Any], jdbcConfig: CredentialsLoader.JdbcConfig): DataFrame
 }

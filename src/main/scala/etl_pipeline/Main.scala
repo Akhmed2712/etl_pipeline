@@ -117,7 +117,7 @@ object Main {
     val transformer = loadTransformer(scriptLocation)
 
     log.info("Running transform...")
-    val df = transformer.processData(spark, readConf)
+    val df = transformer.processData(spark, readConf, jdbcConfig)
     writeToMySQL(spark, df, catalogConf, jdbcConfig)
   }
 

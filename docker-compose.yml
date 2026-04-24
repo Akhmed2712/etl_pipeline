@@ -1,0 +1,19 @@
+services:
+  spark-etl:
+    image: apache/spark:4.0.2-scala2.13-java17-ubuntu
+    container_name: spark_etl_runner
+    volumes:
+      - ./target/scala-2.13:/app
+    working_dir: /opt/spark
+    environment:
+      - SPARK_HOME=/opt/spark
+    # These are placeholders that we will override via the command line
+    command: >
+      /opt/spark/bin/spark-submit
+      --master local[*]
+      --class etl_pipeline.Main
+      /app/${JAR_NAME:-etl_pipeline-assembly-1.0.0.jar}
+      --env dev
+      --catalog ${CATALOG}
+      --resource ${RESOURCE}
+      --start_date ${START_DATE}

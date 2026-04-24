@@ -55,7 +55,7 @@ object CredentialsLoader {
 
     val host = creds("host").toString
     val port = creds.getOrElse("port", 3306).toString
-    val database = catalogConf.getOrElse("database", "").toString
+    val database = creds("database").toString
     val driver = creds.getOrElse("driver", "com.mysql.cj.jdbc.Driver").toString
 
     val jdbcUrl =

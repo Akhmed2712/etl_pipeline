@@ -1,4 +1,4 @@
-name := "etl_pipeline"
+name := "etl-pipeline"
 version := "1.0.0"
 scalaVersion := "2.13.12"
 
@@ -16,6 +16,7 @@ libraryDependencies ++= Seq(
 )
 
 assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", _*) => MergeStrategy.discard
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case "reference.conf" => MergeStrategy.concat
   case _ => MergeStrategy.first
 }

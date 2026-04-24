@@ -1,13 +1,15 @@
-package etl_pipeline.scripts.myjob
+package etl_pipeline.scripts.my_orders_job
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Properties
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.slf4j.LoggerFactory
 
 import etl_pipeline.Transformer
+import etl_pipeline.utils.CredentialsLoader
 
 import scala.jdk.CollectionConverters._
 
@@ -33,7 +35,7 @@ object MyOrdersJob extends Transformer {
    * (all {~~~...~~~} templates already replaced with dates)
    * @return transformed DataFrame ready to be written to MySQL
    */
-  def processData(spark: SparkSession, env: Map[String, Any]): DataFrame = {
+  def processData(spark: SparkSession, env: Map[String, Any], jdbcConfig: CredentialsLoader.JdbcConfig): DataFrame = {
 
     // -- Scalar dates (resolved from {~~~...~~~} templates) ------------------
     val currentDate = env("current_date").toString    // e.g. "2024-01-15"
@@ -45,10 +47,12 @@ object MyOrdersJob extends Transformer {
     // -- Read source table — filter already resolved -------------------------
     val rejectConf = env("transaction_1").asInstanceOf[java.util.Map[String, Any]].asScala
 
+    val props = new java.util.Properties()
+    jdbcConfig.props.foreach { case (k, v) => props.setProperty(k, v) }
+
     val dfOrders = spark.read
-      .table(s"${rejectConf("database")}.${rejectConf("table")}")
-      .filter(rejectConf("filter").toString)  // e.g. "event_date = '2024-01-14'"
-      .coalesce(5)
+      .jdbc(url = jdbcConfig.url, s"${rejectConf("database")}.${rejectConf("table")}", props)
+      .filter(rejectConf("filter").toString)
 
     log.info(s"Source row count: ${dfOrders.count()}")
 
