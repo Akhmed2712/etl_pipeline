@@ -43,7 +43,7 @@ object MyOrdersJob extends Transformer {
     log.info(s"current_date=$currentDate | load_date=$loadDate | current_month=$currentMonth")
 
     // -- Read source table — filter already resolved -------------------------
-    val rejectConf = env("usage_sa_opay_reject").asInstanceOf[java.util.Map[String, Any]].asScala
+    val rejectConf = env("transaction_1").asInstanceOf[java.util.Map[String, Any]].asScala
 
     val dfOrders = spark.read
       .table(s"${rejectConf("database")}.${rejectConf("table")}")
