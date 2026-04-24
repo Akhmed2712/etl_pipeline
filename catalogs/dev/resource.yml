@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────────────────────────
+# Base Spark config anchor
+# ──────────────────────────────────────────────────────────────────
+_base_conf: &base_conf
+  spark.sql.session.timeZone: Asia/Jakarta
+  spark.driver.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+  spark.executor.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+
+# ──────────────────────────────────────────────────────────────────
+# Presets  (anchor + override pattern, same as original)
+# ──────────────────────────────────────────────────────────────────
+low: &low
+  <<: *base_conf
+  spark.executor.cores: 1
+  spark.executor.memory: 1g
+  spark.executor.instances: 2
+
+medium: &medium
+  <<: *base_conf
+  spark.executor.cores: 2
+  spark.executor.memory: 2g
+  spark.executor.instances: 3
+
+# ──────────────────────────────────────────────────────────────────
+# Job-specific resource — matches catalog key name by convention
+# ──────────────────────────────────────────────────────────────────
+my_orders_job:
+  <<: *low
+  spark.app.name: my_orders_job
+  spark.sql.shuffle.partitions: 10

@@ -1,0 +1,9 @@
+credentials/credentials.yml
+logs/
+target/
+.bsp/
+.idea/
+*.class
+*.log
+.metals/
+.vscode/

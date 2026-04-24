@@ -1,93 +1,343 @@
-# ETL Pipeline
+# Config-Based ETL in Scala — v1
 
+> **Scope of this doc:** Catalog & resource config design, the big-picture ETL architecture, and how to run it.
 
+---
 
-## Getting started
+## Table of Contents
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. [Big Idea](#1-big-idea)
+2. [Catalog Config](#2-catalog-config)
+3. [Resource Config](#3-resource-config)
+4. [How It All Fits Together](#4-how-it-all-fits-together)
+5. [How to Run](#5-how-to-run)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## 1. Big Idea
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+The goal is a **config-driven ETL framework** where you never touch Scala code to onboard a new pipeline job. Everything a job needs — what to read, how to transform, where to write, which Spark resources to use, and how to connect to databases — is declared in YAML files.
 
 ```
-cd existing_repo
-git remote add origin https://git.farmagitechs.co.id/innovation/bussiness-intelegent/etl-pipeline.git
-git branch -M main
-git push -uf origin main
+YAML configs
+  └─ catalog.yml →  what data to move and how
+  └─ resource.yml →  how much Spark to give it
+  └─ credentials.yml →  database secrets (gitignored)
+
+Scala engine
+  └─ reads the configs
+  └─ resolves date templates
+  └─ loads the right transform script
+  └─ reads from source, writes to destination
 ```
 
-## Integrate with your tools
+**Why this pattern?**
 
-- [ ] [Set up project integrations](https://git.farmagitechs.co.id/innovation/bussiness-intelegent/etl-pipeline/-/settings/integrations)
+- **Zero-code onboarding** — a new job is a new YAML block, not a new PR to the engine.
+- **Environment promotion** — swap `--env dev` → `--env prod`; configs diverge, engine doesn't.
+- **Date portability** — use `{~~~%Y-%m-%d:day=1~~~}` in any string value; the engine resolves it at runtime from `--start_date`.
+- **Separation of concerns** — infra (Spark sizing, JDBC URLs) stays out of transform logic.
 
-## Collaborate with your team
+---
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## 2. Catalog Config
 
-## Test and Deploy
+**Location:** `catalogs/<env>/catalog.yml`
 
-Use the built-in continuous integration in GitLab.
+The catalog is the **job blueprint**. One top-level key = one pipeline job.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Full example
 
-***
+```yaml
+# Anchor for shared MySQL connection settings
+_mysql_conf: &mysql_conf
+  layer: mysql
+  env: dev
+  credentials_key: mysqldev # → looks up this key in credentials.yml
+  database: transactions # → used in jdbc:mysql://host:port/<database>
 
-# Editing this README
+my_orders_job:
+  <<: *mysql_conf
+  table: orders_summary # destination table
+  schema: reporting # destination schema  →  reporting.orders_summary
+  script_type: scala
+  script_location: setl_pipeline.scripts.my_orders_job.MyOrdersJob # to run
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+  read_conf:
+    # Scalar dates — resolved from --start_date at runtime
+    current_date: "{~~~%Y-%m-%d:day=0~~~}" # start_date − 0 days
+    load_date: "{~~~%Y-%m-%d:day=0~~~}"
+    current_month: "{~~~%Y-%m-01:day=0~~~}" # first of the month
 
-## Suggestions for a good README
+    # Source table A
+    transactions_1:
+      database: transactions
+      table: orders
+      filter: "encounter_date = '{~~~%Y-%m-%d:day=1~~~}'"   # yesterday
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+    # Source table B
+    orders_archive:
+      database: archive
+      table: orders_hist
+      filter: "encounter_date >= '{~~~%Y-%m-%d:day=3~~~}' AND encounter_date <= '{~~~%Y-%m-%d:day=1~~~}'"
 
-## Name
-Choose a self-explaining name for your project.
+  write_conf:
+    mode: overwrite # overwrite | append
+    schema:
+      - column_name: order_id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: customer_id
+        type: varchar(50)
+      - column_name: total_amount
+        type: decimal(18,2)
+      - column_name: order_status
+        type: varchar(30)
+      - column_name: created_date
+        type: varchar(20)
+      - column_name: load_ts
+        type: timestamp
+    options:
+      batchsize: 1000
+      numPartitions: 5
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Field reference
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+| Field | Required | Description |
+|---|---|---|
+| `credentials_key` | ✅ | Key in `credentials.yml` to use for JDBC auth |
+| `database` | ✅ | Database name appended to the JDBC URL |
+| `table` | ✅ | Destination table name |
+| `schema` | ✅ | Destination schema; combined as `schema.table` |
+| `script_type` | ✅ | `scala` (Scala object)
+| `script_location` | ✅ | Path to the transform file, relative to project root |
+| `read_conf` | ✅ | Free-form map passed directly into `processData()` |
+| `write_conf.mode` | ✅ | Spark write mode: `overwrite` or `append` |
+| `write_conf.options.batchsize` | ❌ | JDBC batch insert size (default: 1000) |
+| `write_conf.options.numPartitions` | ❌ | Spark JDBC parallelism (default: 5) |
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Date template syntax
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Any string value anywhere in the catalog (including nested maps and filter strings) can use:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```
+{~~~<strftime_format>:day=<N>~~~}
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+- `<strftime_format>` — a Python/Java strftime pattern: `%Y`, `%m`, `%d`
+- `day=<N>` — subtract N days from `--start_date` before formatting
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+**Examples with `--start_date 2024-01-15`:**
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+| Template | Resolved value |
+|---|---|
+| `{~~~%Y-%m-%d:day=0~~~}` | `2024-01-15` |
+| `{~~~%Y-%m-%d:day=1~~~}` | `2024-01-14` |
+| `{~~~%Y-%m-%d:day=3~~~}` | `2024-01-12` |
+| `{~~~%Y-%m-01:day=0~~~}` | `2024-01-01` |
+| `{~~~%Y-%m-01:day=1~~~}` | `2024-01-01` *(Jan 14 → first of Jan)* |
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Templates can appear anywhere inside a value string, including inside SQL filter expressions:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```yaml
+filter: "encounter_date = '{~~~%Y-%m-%d:day=1~~~}' AND status = 'ACTIVE'"
+# → "encounter_date = '2024-01-14' AND status = 'ACTIVE'"
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+---
 
-## License
-For open source projects, say how it is licensed.
+## 3. Resource Config
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+**Location:** `catalogs/<env>/resource.yml`
+
+The resource config controls **Spark sizing**. One top-level key = one resource profile. By convention the key name matches the catalog job name.
+
+### Full example
+
+```yaml
+# Shared base config — timezone alignment across driver and executors
+_base_conf: &base_conf
+  spark.sql.session.timeZone: Asia/Jakarta
+  spark.driver.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+  spark.executor.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+
+# Preset: small workloads
+low: &low
+  <<: *base_conf
+  spark.executor.cores: 1
+  spark.executor.memory: 1g
+  spark.executor.instances: 2
+
+# Preset: medium workloads
+medium: &medium
+  <<: *base_conf
+  spark.executor.cores: 2
+  spark.executor.memory: 2g
+  spark.executor.instances: 3
+
+# Job-specific profile — inherits from a preset, adds overrides
+my_orders_job:
+  <<: *low
+  spark.app.name: my_orders_job
+  spark.sql.shuffle.partitions: 10
+```
+
+### Field reference
+
+| Field | Description |
+|---|---|
+| `spark.app.name` | Shown in Spark UI and logs |
+| `spark.executor.cores` | vCPUs per executor |
+| `spark.executor.memory` | RAM per executor (e.g. `1g`, `4g`) |
+| `spark.executor.instances` | Number of executors |
+| `spark.sql.shuffle.partitions` | Parallelism for shuffle operations (joins, groupBy) |
+| `spark.sql.session.timeZone` | Session timezone for date/timestamp functions |
+| `spark.driver.extraJavaOptions` | JVM args for the driver |
+| `spark.executor.extraJavaOptions` | JVM args for each executor |
+
+Any valid `SparkConf` key can be added here. The engine passes all keys directly to `SparkConf.set(k, v)`.
+
+### Choosing a preset
+
+| Preset | Use for |
+|---|---|
+| `low` | Lightweight aggregations, small tables (< 10M rows) |
+| `medium` | Mid-size joins, moderate shuffle (10M–100M rows) |
+| Custom | Override any field directly under your job key |
+
+---
+
+## 4. How It All Fits Together
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        spark-submit                         │
+│   --env dev  --catalog my_orders_job  --start_date 2024-…  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                    ┌────▼────┐
+                    │  Main   │  (entry point)
+                    └────┬────┘
+                         │
+           ┌─────────────┼──────────────┐
+           │             │              │
+     ┌─────▼──────┐ ┌────▼──────┐ ┌────▼──────────┐
+     │ YamlLoader │ │DateResolv.│ │CredentialsLoad│
+     │            │ │           │ │               │
+     │catalog.yml │ │{~~~...~~~}│ │credentials.yml│
+     │resource.yml│ │→ real date│ │→ jdbcUrl+props│
+     └─────┬──────┘ └───────────┘ └───────────────┘
+           │
+     ┌─────▼──────────────────────┐
+     │       SparkSession         │
+     │  (configured from resource)│
+     └─────┬──────────────────────┘
+           │
+     ┌─────▼──────────────────────┐
+     │     MyOrdersJob.processData  │
+     │  (reads read_conf, returns │
+     │   a DataFrame)             │
+     └─────┬──────────────────────┘
+           │
+     ┌─────▼──────────────────────┐
+     │      df.write.jdbc(...)    │
+     │  (uses write_conf + creds) │
+     └────────────────────────────┘
+```
+
+**Runtime sequence:**
+
+1. Parse CLI args (`--env`, `--catalog`, `--resource`, `--start_date`)
+2. Load `catalog.yml` and `resource.yml` for the given env
+3. Resolve all `{~~~...~~~}` templates using `--start_date`
+4. Load JDBC credentials from `credentials.yml` via `credentials_key`
+5. Create `SparkSession` with all keys from the resource profile
+6. Call `MyOrdersJob.processData(spark, read_conf)` → returns `DataFrame`
+7. Write the `DataFrame` to MySQL using `write_conf` settings
+
+---
+
+## 5. How to Run
+
+### Prerequisites
+
+- Java 17
+- Scala 2.13 + SBT
+- Apache Spark 3.3+ (`spark-submit` on PATH)
+- MySQL JDBC driver included in the fat jar (via `build.sbt`)
+- `credentials/credentials.yml` filled in (copy from `credentials_example.yml`)
+
+### Build
+
+```bash
+# Compile and run tests
+sbt test
+
+# Build fat jar (includes all dependencies except Spark)
+sbt assembly
+# → target/scala-2.13/etl_pipeline-assembly-1.0.0.jar
+```
+
+### Run locally (dev)
+
+```bash
+spark-submit \
+  --master local[*] \
+  --class mypipeline.Main \
+  target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
+  --env dev \
+  --catalog my_orders_job \
+  --resource my_orders_job \
+  --start_date 2024-01-15
+```
+
+### Run on a cluster (YARN / standalone)
+
+```bash
+spark-submit \
+  --master yarn \
+  --deploy-mode cluster \
+  --class mypipeline.Main \
+  target/scala-2.13/etl_pipeline-assembly-1.0.0.jar \
+  --env prod \
+  --catalog my_orders_job \
+  --resource my_orders_job \
+  --start_date 2024-01-15
+```
+
+### CLI arguments
+
+| Argument | Required | Values | Description |
+|---|---|---|---|
+| `--env` | ✅ | `dev` \| `uat` \| `prod` | Which `catalogs/<env>/` to read from |
+| `--catalog` | ✅ | any key in `catalog.yml` | Which job config to run |
+| `--resource` | ✅ | any key in `resource.yml` | Which Spark sizing profile to use |
+| `--start_date` | ❌ | `YYYY-MM-DD` | Anchor date for `{~~~...~~~}` template resolution |
+
+> **Tip:** If `--start_date` is omitted, no date template resolution is performed. Any unresolved `{~~~...~~~}` strings in the config will be passed as-is to the transform — useful for testing or static configs.
+
+### Credentials setup
+
+```bash
+cp credentials/credentials_example.yml credentials/credentials.yml
+# Edit credentials.yml — fill in host, port, user, password
+# This file is gitignored and never committed
+```
+
+`credentials.yml` structure:
+
+```yaml
+mysqldev:
+  host: localhost
+  port: 3306
+  user: myuser
+  password: mypassword
+  driver: com.mysql.cj.jdbc.Driver   # optional, this is the default
+```
+
+The `credentials_key` in `catalog.yml` must match a top-level key here.
+
+---
+
+*v1 — covers catalog & resource configs, architecture overview, and run instructions.*

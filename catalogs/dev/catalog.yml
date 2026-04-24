@@ -1,0 +1,47 @@
+_mysql_conf: &mysql_conf
+  layer: mysql
+  env: dev
+  credentials_key: mysqldev    # matches key in credentials/credentials.yml
+  database: transactions       # used to build jdbc_url: jdbc:mysql://host:port/<database>
+
+my_orders_job:
+  <<: *mysql_conf
+  table: orders_summary        # destination table
+  schema: reporting            # destination schema (schema.table)
+  script_type: scala
+  script_location: etl_pipeline.scripts.my_orders_job.MyOrdersJob
+
+  read_conf:
+    current_date: "{~~~%Y-%m-%d:day=0~~~}"
+    load_date: "{~~~%Y-%m-%d:day=0~~~}"
+    current_month: "{~~~%Y-%m-01:day=0~~~}"
+
+    usage_sa_opay_reject:
+      database: transactions
+      table: orders
+      filter: "event_date = '{~~~%Y-%m-%d:day=1~~~}'"
+
+    orders_archive:
+      database: archive
+      table: orders_hist
+      filter: "event_date >= '{~~~%Y-%m-%d:day=3~~~}' AND event_date <= '{~~~%Y-%m-%d:day=1~~~}'"
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: order_id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: customer_id
+        type: varchar(50)
+      - column_name: total_amount
+        type: decimal(18,2)
+      - column_name: order_status
+        type: varchar(30)
+      - column_name: created_date
+        type: varchar(20)
+      - column_name: load_ts
+        type: timestamp
+    options:
+      batchsize: 1000
+      numPartitions: 5

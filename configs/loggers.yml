@@ -1,0 +1,55 @@
+### Load this file at the main function, example:
+###
+### CURRENT_DIR = os.path.dirname(__file__)
+###
+### if __name__ == "__main__":
+###     with open(os.path.join(CURRENT_DIR, "loggers.yml"), "rt") as conf_file:
+###         LOGGING_CONFIG = yaml.safe_load(conf_file.read())
+###         logging.config.dictConfig(LOGGING_CONFIG)
+###
+###     log = logging.getLogger(__name__)
+###
+###
+
+version: 1
+disable_existing_loggers: False
+formatters:
+    simple:
+        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+handlers:
+    console:
+        class: logging.StreamHandler
+        level: INFO
+        formatter: simple
+        stream: ext://sys.stdout
+
+    info_file_handler:
+        class: logging.handlers.RotatingFileHandler
+        level: INFO
+        formatter: simple
+        filename: logs/info.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 20
+        encoding: utf8
+        delay: True
+
+    error_file_handler:
+        class: logging.handlers.RotatingFileHandler
+        level: ERROR
+        formatter: simple
+        filename: logs/errors.log
+        maxBytes: 10485760 # 10MB
+        backupCount: 20
+        encoding: utf8
+        delay: True
+
+loggers:
+    scripts:
+        level: INFO
+        handlers: [console, info_file_handler, error_file_handler]
+        propagate: no
+
+root:
+    level: INFO
+    handlers: [console, info_file_handler, error_file_handler]
