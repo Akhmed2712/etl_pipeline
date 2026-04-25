@@ -69,4 +69,34 @@ object CredentialsLoader {
 
     JdbcConfig(jdbcUrl, jdbcProps)
   }
+
+  def loadWriteCredentials(catalogConf: Map[String, Any]): JdbcConfig = {
+    val writeKey = catalogConf.get("write_credentials_key").map(_.toString).getOrElse("")
+    if (writeKey.isEmpty) return loadCredentials(catalogConf) // fallback: same server
+
+    val credFile = new File(CredentialsPath)
+    val yaml = new Yaml()
+    val allCreds: Map[String, Any] = {
+      val raw = yaml.load[JMap[String, Any]](new FileInputStream(credFile))
+      raw.asScala.toMap
+    }
+
+    require(allCreds.contains(writeKey),
+      s"write_credentials_key='$writeKey' not found in credentials.yml.")
+
+    val creds: Map[String, Any] =
+      allCreds(writeKey).asInstanceOf[JMap[String, Any]].asScala.toMap
+
+    val host= creds("host").toString
+    val port= creds.getOrElse("port", 3306).toString
+    val database = catalogConf.getOrElse("write_database", catalogConf.getOrElse("database", "")).toString
+    val driver= creds.getOrElse("driver", "com.mysql.cj.jdbc.Driver").toString
+
+    val jdbcUrl = s"jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=Asia/Jakarta"
+    JdbcConfig(jdbcUrl, Map(
+      "user"-> creds("user").toString,
+      "password" -> creds("password").toString,
+      "driver"-> driver
+    ))
+  }
 }

@@ -195,19 +195,16 @@ def writeToMySQL(
     catalogConf: Map[String, Any],
     jdbcConfig: CredentialsLoader.JdbcConfig
   ): Unit = {
+    val jdbcWriteConfig = CredentialsLoader.loadWriteCredentials(catalogConf)  // ← ADD
+
     val readConf = catalogConf.getOrElse("read_conf", Map.empty[String, Any])
       .asInstanceOf[Map[String, Any]]
-
-    val scriptLocation = catalogConf.getOrElse("script_location", "")
-      .toString.trim
+    val scriptLocation = catalogConf.getOrElse("script_location", "").toString.trim
     require(scriptLocation.nonEmpty, "'script_location' is missing from the catalog config.")
 
-    log.info(s"Loading transformer: $scriptLocation")
     val transformer = loadTransformer(scriptLocation)
-
-    log.info("Running transform...")
-    val df = transformer.processData(spark, readConf, jdbcConfig)
-    writeToMySQL(spark, df, catalogConf, jdbcConfig)
+    val df = transformer.processData(spark, readConf, jdbcConfig)      // reads: mysqllocal
+    writeToMySQL(spark, df, catalogConf, jdbcWriteConfig)              // writes: mysqldev
   }
 
   // ── CLI ───────────────────────────────────────────────────────────────────────

@@ -37,6 +37,8 @@ object TesPendaftaran extends Transformer {
    */
   def processData(spark: SparkSession, env: Map[String, Any], jdbcConfig: CredentialsLoader.JdbcConfig): DataFrame = {
 
+    val loadTs = date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss")
+
     // -- Read source table — filter already resolved -------------------------
     val dcPendaftaran = env("dc_pendaftaran").asInstanceOf[Map[String, Any]]
 
@@ -50,11 +52,9 @@ object TesPendaftaran extends Transformer {
     log.info(s"Source row count: ${dfPendaftaran.count()}")
 
     // -- Transformation logic -------------------------------------------------
-    val loadTs = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-
     val dfResult = dfPendaftaran
       .select("id", "id_pasien", "waktu_daftar", "waktu_keluar")
-      .withColumn("load_ts", lit(loadTs))
+      .withColumn("load_ts", loadTs)
 
     log.info(s"Output row count: ${dfResult.count()}")
     dfResult

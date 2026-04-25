@@ -55,7 +55,9 @@ my_orders_job:
 tes_pendaftaran:
   <<: *mysql_conf_local
   table: tes_pendaftaran
-  schema: farmagitechs
+  schema: olap
+  write_credentials_key: mysqllocalolap
+  write_database: olap
   script_type: scala
   script_location: etl_pipeline.scripts.tes_pendaftaran.TesPendaftaran
 
@@ -63,7 +65,7 @@ tes_pendaftaran:
     dc_pendaftaran:
       database: farmagitechs
       table: dc_pendaftaran
-      filter: "DATE(waktu_daftar) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "substring(waktu_daftar, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
 
   write_conf:
     mode: overwrite
