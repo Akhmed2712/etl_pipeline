@@ -110,8 +110,8 @@ my_orders_job:
 |---|---|---|
 | `credentials_key` | ✅ | Key in `credentials.yml` to use for JDBC auth |
 | `database` | ✅ | Database name appended to the JDBC URL |
-| `write_credentials_key` | ❌ | Key in `credentials.yml` to use for JDBC auth target (default: use credentials_key) |
-| `write_database` | ❌ | Database target name appended to the JDBC URL (default: use database)|
+| `write_credentials_key` | ❌ | Overwrite credentials_key for target DB (if different from source) |
+| `write_database` | ❌ | Overwrite database for target DB (if different from source) 
 | `table` | ✅ | Destination table name |
 | `schema` | ✅ | Destination schema; combined as `schema.table` |
 | `script_type` | ✅ | `scala` (Scala object)
