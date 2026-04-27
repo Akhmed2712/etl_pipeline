@@ -7,6 +7,7 @@ RESOURCE=${3:-"my_orders_job"}
 START_DATE=${4:-"2024-01-15"}
 
 docker run --rm \
+  --network analytics_bridge \
   -v "$(pwd)/target/scala-2.13/:/app/" \
   -v "$(pwd)/catalogs:/opt/spark/work-dir/catalogs" \
   -v "$(pwd)/configs:/opt/spark/work-dir/configs" \

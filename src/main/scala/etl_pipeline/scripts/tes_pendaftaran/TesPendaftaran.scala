@@ -55,6 +55,7 @@ object TesPendaftaran extends Transformer {
     val dfResult = dfPendaftaran
       .select("id", "id_pasien", "waktu_daftar", "waktu_keluar")
       .withColumn("load_ts", loadTs)
+      .withColumn("partition_date", substring(col("waktu_daftar"), 1, 10))
 
     log.info(s"Output row count: ${dfResult.count()}")
     dfResult

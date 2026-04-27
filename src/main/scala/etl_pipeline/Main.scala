@@ -60,7 +60,8 @@ def writeToMySQL(
   spark: SparkSession,
   df: DataFrame,
   catalogConf: Map[String, Any],
-  jdbcConfig: CredentialsLoader.JdbcConfig
+  jdbcConfig: CredentialsLoader.JdbcConfig,
+  startDate: Option[String] = None
 ): Unit = {
   val writeConf = catalogConf("write_conf").asInstanceOf[Map[String, Any]]
   val options = writeConf.get("options").map(_.asInstanceOf[Map[String, Any]]).getOrElse(Map.empty[String, Any])
@@ -71,11 +72,22 @@ def writeToMySQL(
   val batchSize = options.getOrElse("batchsize", 1000).toString
   val numParts = options.getOrElse("numPartitions", 5).toString
 
-  val partitionDate: Option[String] = writeConf.get("partition_date").map(_.toString)
-
-  val dfWithPartition = partitionDate match {
-    case Some(pd) => df.withColumn("partition_date", lit(pd).cast("date"))
-    case None => df
+  // partition_date resolution:
+  //   - if the script already added a partition_date column → keep it (script wins)
+  //   - else if start_date was supplied → inject start_date - 1
+  //   - else → no partition column
+  val dfWithPartition = if (df.columns.contains("partition_date")) {
+    log.info("partition_date already set by script — skipping framework injection")
+    df
+  } else {
+    startDate match {
+      case Some(sd) =>
+        val anchor = java.time.LocalDate.parse(sd, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val pd = anchor.minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        log.info(s"Injecting partition_date=$pd (start_date - 1) into DataFrame")
+        df.withColumn("partition_date", lit(pd).cast("date"))
+      case None => df
+    }
   }
 
   val catalogCols: List[Map[String, Any]] = writeConf.get("schema") match {
@@ -126,19 +138,34 @@ def writeToMySQL(
     conn.createStatement().executeUpdate(ddl)
 
     // ── 5. Partition logic ────────────────────────────────────────────────
-    partitionDate match {
-      case Some(pd) if mode == "overwrite" =>
-        log.info(s"Overwrite partition: DELETE FROM $fullTable WHERE `partition_date` = '$pd'")
-        conn.createStatement().executeUpdate(
-          s"DELETE FROM $fullTable WHERE `partition_date` = '$pd'"
-        )
-      case Some(_) if mode == "append" =>
-        log.info(s"Append mode: inserting partition_date = ${partitionDate.get} without delete")
-      case None if mode == "overwrite" =>
-        log.info(s"Full overwrite (no partition): DROP + CREATE $fullTable")
-        conn.createStatement().executeUpdate(s"DROP TABLE IF EXISTS `$fullTable`")
-        conn.createStatement().executeUpdate(ddl.replace("IF NOT EXISTS ", ""))
-      case _ =>
+    // Derive the actual partition_date value from the DataFrame (set by script or injected above)
+    val effectivePartitionDates: List[String] =
+      if (dfWithPartition.columns.contains("partition_date")) {
+        dfWithPartition
+          .select("partition_date")
+          .distinct()
+          .collect()
+          .flatMap(r => Option(r.get(0)).map(_.toString))
+          .toList
+          .sorted
+      } else List.empty
+
+    if (effectivePartitionDates.nonEmpty) {
+      if (mode == "overwrite") {
+        log.info(s"Overwrite: deleting ${effectivePartitionDates.size} partition(s): ${effectivePartitionDates.mkString(", ")}")
+        effectivePartitionDates.foreach { pd =>
+          conn.createStatement().executeUpdate(
+            s"DELETE FROM $fullTable WHERE `partition_date` = '$pd'"
+          )
+          log.info(s"Deleted partition_date=$pd from $fullTable")
+        }
+      } else {
+        log.info(s"Append mode: inserting ${effectivePartitionDates.size} partition(s) = ${effectivePartitionDates.mkString(", ")} without delete")
+      }
+    } else if (mode == "overwrite") {
+      log.info(s"Full overwrite (no partition): DROP + CREATE $fullTable")
+      conn.createStatement().executeUpdate(s"DROP TABLE IF EXISTS $fullTable")
+      conn.createStatement().executeUpdate(ddl.replace("IF NOT EXISTS ", ""))
     }
   } finally {
     conn.close()
@@ -193,9 +220,10 @@ def writeToMySQL(
   def runPipeline(
     spark: SparkSession,
     catalogConf: Map[String, Any],
-    jdbcConfig: CredentialsLoader.JdbcConfig
+    jdbcConfig: CredentialsLoader.JdbcConfig,
+    startDate: Option[String] = None
   ): Unit = {
-    val jdbcWriteConfig = CredentialsLoader.loadWriteCredentials(catalogConf)  // ← ADD
+    val jdbcWriteConfig = CredentialsLoader.loadWriteCredentials(catalogConf)
 
     val readConf = catalogConf.getOrElse("read_conf", Map.empty[String, Any])
       .asInstanceOf[Map[String, Any]]
@@ -203,8 +231,8 @@ def writeToMySQL(
     require(scriptLocation.nonEmpty, "'script_location' is missing from the catalog config.")
 
     val transformer = loadTransformer(scriptLocation)
-    val df = transformer.processData(spark, readConf, jdbcConfig)      // reads: mysqllocal
-    writeToMySQL(spark, df, catalogConf, jdbcWriteConfig)              // writes: mysqldev
+    val df = transformer.processData(spark, readConf, jdbcConfig)
+    writeToMySQL(spark, df, catalogConf, jdbcWriteConfig, startDate)
   }
 
   // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -277,7 +305,7 @@ def writeToMySQL(
     log.info(s"Spark started | app=${spark.sparkContext.applicationId}")
 
     try {
-      runPipeline(spark, catalogConf, jdbcConfig)
+      runPipeline(spark, catalogConf, jdbcConfig, args.startDate)
     } catch {
       case e: Exception =>
         log.error("Pipeline failed.", e)

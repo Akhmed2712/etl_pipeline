@@ -65,15 +65,14 @@ tes_pendaftaran:
     dc_pendaftaran:
       database: farmagitechs
       table: dc_pendaftaran
-      filter: "substring(waktu_daftar, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "substring(waktu_daftar, 1, 10) <= '{~~~%Y-%m-%d:day=1~~~}'"
 
   write_conf:
     mode: overwrite
-    partition_date: "{~~~%Y-%m-%d:day=1~~~}"
     schema:
       - column_name: id
         type: bigint
-        constraint: primary_key,not_null
+      #  constraint: primary_key,not_null
       - column_name: id_pasien
         type: bigint
       - column_name: waktu_daftar
