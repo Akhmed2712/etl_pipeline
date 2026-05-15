@@ -1,0 +1,33 @@
+erDiagram
+
+  %% ─── TARGET DIMENSION TABLE ──────────────────────────────────────────────
+
+  fg_dim_penjamin {
+    bigint  id             PK
+    varchar nama
+    varchar jenis
+    varchar aktif_apm
+    int     status_aktif
+  }
+
+  %% ─── SOURCE TABLE ────────────────────────────────────────────────────────
+
+  dc_penjamin {
+    bigint  id             PK
+    varchar nama
+    varchar jenis
+    varchar aktif_apm
+    int     status_aktif
+  }
+
+  %% ─── ETL LINEAGE ─────────────────────────────────────────────────────────
+
+  dc_penjamin }o--|| fg_dim_penjamin : "direct mapping"
+
+  %% ─── COLUMN MAPPING DOCUMENTATION ────────────────────────────────────────
+
+  %% id            → id
+  %% nama          → nama
+  %% jenis         → jenis
+  %% aktif_apm     → aktif_apm
+  %% status_aktif  → status_aktif

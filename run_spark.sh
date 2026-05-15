@@ -18,7 +18,7 @@ docker run --rm \
   --master "local[*]" \
   --class etl_pipeline.Main \
   /app/"$JAR_NAME" \
-  --env dev \
+  --env uat \
   --catalog "$CATALOG" \
   --resource "$RESOURCE" \
   --start_date "$START_DATE"

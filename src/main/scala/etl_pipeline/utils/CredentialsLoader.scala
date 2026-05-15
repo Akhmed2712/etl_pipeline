@@ -2,101 +2,109 @@ package etl_pipeline.utils
 
 import java.io.{File, FileInputStream}
 import java.util.{Map => JMap}
-
 import org.yaml.snakeyaml.Yaml
-
 import scala.jdk.CollectionConverters._
 
-/**
- * CredentialsLoader
- *
- * Loads JDBC credentials from credentials/credentials.yml using the
- * `credentials_key` field defined in the catalog.
- *
- * Returns (jdbcUrl, jdbcProps) ready for spark.read.jdbc() / df.write.jdbc().
- */
 object CredentialsLoader {
 
+  // Path absolut ke file credentials (tetap di root/credentials)
   val CredentialsPath: String =
     new File(System.getProperty("user.dir"), "credentials/credentials.yml").getAbsolutePath
 
   case class JdbcConfig(url: String, props: Map[String, String])
 
   /**
-   * Load credentials for the given catalog config.
-   *
-   * @param catalogConf fully-resolved catalog map (must have "credentials_key" and "database")
-   * @return dbcConfig(url, props)
+   * Mendapatkan path resource.yml berdasarkan field 'env' di catalog
    */
-  def loadCredentials(catalogConf: Map[String, Any]): JdbcConfig = {
-    val credFile = new File(CredentialsPath)
-    require(
-      credFile.exists(),
-      s"Credentials file not found: $CredentialsPath\n" +
-        "Copy credentials/credentials_example.yml → credentials/credentials.yml and fill in values."
-    )
+  private def getResourcePath(catalogConf: Map[String, Any]): String = {
+    val env = catalogConf.getOrElse("env", "dev").toString
+    new File(System.getProperty("user.dir"), s"catalogs/$env/resource.yml").getAbsolutePath
+  }
 
-    val yaml = new Yaml()
-    val allCreds: Map[String, Any] = {
-      val raw = yaml.load[JMap[String, Any]](new FileInputStream(credFile))
-      raw.asScala.toMap
+  /**
+   * Helper untuk membaca file YAML menjadi Map Scala
+   */
+  private def loadYaml(path: String): Map[String, Any] = {
+    val file = new File(path)
+    if (!file.exists()) {
+      println(s"WARNING: File not found at $path")
+      return Map.empty
+    }
+    val fis = new FileInputStream(file)
+    try {
+      val yaml = new Yaml()
+      val raw = yaml.load[JMap[String, Any]](fis)
+      if (raw == null) Map.empty else raw.asScala.toMap
+    } finally {
+      fis.close()
+    }
+  }
+
+  /**
+   * Logika utama untuk loading JDBC Config (Read & Write)
+   */
+  def loadJdbcConfig(catalogConf: Map[String, Any], isWrite: Boolean = false): JdbcConfig = {
+    // 1. Identifikasi Key Kredensial
+    val credKey = if (isWrite) {
+      catalogConf.getOrElse("write_credentials_key", catalogConf.getOrElse("credentials_key", "")).toString
+    } else {
+      catalogConf.getOrElse("credentials_key", "").toString
     }
 
-    val credKey = catalogConf.getOrElse("credentials_key", "").toString
-    require(credKey.nonEmpty, "'credentials_key' is missing from the catalog config.")
-    require(
-      allCreds.contains(credKey),
-      s"credentials_key='$credKey' not found in credentials.yml. " +
-        s"Available keys: ${allCreds.keys.mkString(", ")}"
-    )
+    // 2. Load dari credentials.yml (Host, Auth)
+    val allCreds = loadYaml(CredentialsPath)
+    require(allCreds.contains(credKey), s"Key '$credKey' tidak ditemukan di $CredentialsPath")
+    val creds = allCreds(credKey).asInstanceOf[JMap[String, Any]].asScala.toMap
 
-    val creds: Map[String, Any] =
-      allCreds(credKey).asInstanceOf[JMap[String, Any]].asScala.toMap
+    // 3. Load dari resource.yml (Partitioning & Tuning)
+    val resourcePath = getResourcePath(catalogConf)
+    val allResources = loadYaml(resourcePath)
+    
+    // Ambil blok berdasarkan nama table (misal: fg_fact_rekap_penggunaan_barang_non_paket)
+    val tableName = catalogConf.getOrElse("table", "").toString
+    val resourceConfig = allResources.get(tableName) match {
+      case Some(m: JMap[_, _]) => m.asInstanceOf[JMap[String, Any]].asScala.toMap
+      case _ => Map.empty[String, Any]
+    }
 
+    // 4. Bangun JDBC URL
     val host = creds("host").toString
     val port = creds.getOrElse("port", 3306).toString
-    val database = catalogConf.getOrElse("database", "").toString
+    val database = if (isWrite) {
+      catalogConf.getOrElse("write_database", catalogConf.getOrElse("database", "")).toString
+    } else {
+      catalogConf.getOrElse("database", "").toString
+    }
     val driver = creds.getOrElse("driver", "com.mysql.cj.jdbc.Driver").toString
 
-    val jdbcUrl =
-      s"jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=Asia/Jakarta"
+    val jdbcUrl = s"jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=Asia/Jakarta"
 
-    val jdbcProps = Map(
-      "user" -> creds("user").toString,
+    // 5. Gabungkan Properti (Base + Tuning)
+    val baseProps = Map(
+      "user"     -> creds("user").toString,
       "password" -> creds("password").toString,
-      "driver" -> driver
+      "driver"   -> driver
     )
 
-    JdbcConfig(jdbcUrl, jdbcProps)
+    // Parameter yang dicari di resource.yml untuk diinject ke JDBC Props
+    val tuningKeys = Seq("partitionColumn", "lowerBound", "upperBound", "numPartitions", "batchsize")
+    
+    val tuningProps = tuningKeys.flatMap { key =>
+      // Urutan Prioritas: resource.yml > catalogConf > credentials.yml
+      val value = resourceConfig.get(key)
+        .orElse(catalogConf.get(key))
+        .orElse(creds.get(key))
+      
+      value.map(v => key -> v.toString)
+    }.toMap
+
+    println(s"DEBUG [${if(isWrite) "WRITE" else "READ"}]: Table=$tableName | EnvPath=$resourcePath")
+    println(s"DEBUG Props: $tuningProps")
+
+    JdbcConfig(jdbcUrl, baseProps ++ tuningProps)
   }
 
-  def loadWriteCredentials(catalogConf: Map[String, Any]): JdbcConfig = {
-    val writeKey = catalogConf.get("write_credentials_key").map(_.toString).getOrElse("")
-    if (writeKey.isEmpty) return loadCredentials(catalogConf) // fallback: same server
-
-    val credFile = new File(CredentialsPath)
-    val yaml = new Yaml()
-    val allCreds: Map[String, Any] = {
-      val raw = yaml.load[JMap[String, Any]](new FileInputStream(credFile))
-      raw.asScala.toMap
-    }
-
-    require(allCreds.contains(writeKey),
-      s"write_credentials_key='$writeKey' not found in credentials.yml.")
-
-    val creds: Map[String, Any] =
-      allCreds(writeKey).asInstanceOf[JMap[String, Any]].asScala.toMap
-
-    val host= creds("host").toString
-    val port= creds.getOrElse("port", 3306).toString
-    val database = catalogConf.getOrElse("write_database", catalogConf.getOrElse("database", "")).toString
-    val driver= creds.getOrElse("driver", "com.mysql.cj.jdbc.Driver").toString
-
-    val jdbcUrl = s"jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=Asia/Jakarta"
-    JdbcConfig(jdbcUrl, Map(
-      "user"-> creds("user").toString,
-      "password" -> creds("password").toString,
-      "driver"-> driver
-    ))
-  }
+  // Integrasi dengan fungsi lama
+  def loadCredentials(catalogConf: Map[String, Any]): JdbcConfig = loadJdbcConfig(catalogConf, isWrite = false)
+  def loadWriteCredentials(catalogConf: Map[String, Any]): JdbcConfig = loadJdbcConfig(catalogConf, isWrite = true)
 }
