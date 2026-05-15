@@ -3,316 +3,251 @@ package etl_pipeline
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.slf4j.LoggerFactory
-
-import etl_pipeline.utils.{CredentialsLoader, DateResolver, YamlLoader}
 import org.apache.spark.sql.functions._
+import etl_pipeline.utils.{CredentialsLoader, DateResolver, YamlLoader}
+import java.util.Properties
+import java.sql.{Connection, DriverManager, SQLException}
 
 import scala.jdk.CollectionConverters._
 
 /**
- * Main
- *
- * MySQL → transform → MySQL pipeline runner.
- * Scala equivalent of main.py.
- *
- * Usage:
- *   spark-submit \
- *     --class mypipeline.Main \
- *     my_pipeline-assembly-1.0.0.jar \
- *     --env dev \
- *     --catalog my_orders_job \
- *     --resource my_orders_job \
- *     [--start_date 2024-01-15]
+ * Main Object
+ * Pipeline ETL Spark untuk MySQL → Transformasi → MySQL.
  */
 object Main {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  // ── Config helpers ──────────────────────────────────────────────────────────
-
+  // ── 1. Spark Session Creator ───────────────────────────────────────────────
   def createSparkSession(resourceConf: Map[String, Any]): SparkSession = {
     val conf = new SparkConf()
     resourceConf.foreach { case (k, v) => conf.set(k, v.toString) }
     SparkSession.builder().config(conf).getOrCreate()
   }
 
-  // ── MySQL writer ─────────────────────────────────────────────────────────────
-
-def buildDDL(fullTable: String, schemaDef: List[Map[String, Any]], mode: String): String = {
-  val cols = schemaDef.map { col =>
-    val name = col("column_name").toString
-    val colType = col("type").toString
-    val constraint = col.getOrElse("constraint", "").toString
-    val notNull = if (constraint.contains("not_null")) " NOT NULL" else ""
-    val pk = if (constraint.contains("primary_key")) s" PRIMARY KEY ($name)" else ""
-    (s"  `$name` $colType$notNull", pk)
-  }
-
-  val columnDefs = cols.map(_._1).mkString(",\n")
-  val pkDefs = cols.flatMap(c => if (c._2.nonEmpty) Some(c._2.trim) else None).mkString(", ")
-  val pkClause = if (pkDefs.nonEmpty) s",\n  $pkDefs" else ""
-
-  val prefix = if (mode == "overwrite") "CREATE TABLE" else "CREATE TABLE IF NOT EXISTS"
-  s"$prefix `$fullTable` (\n$columnDefs$pkClause\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-}
-
-def writeToMySQL(
-  spark: SparkSession,
-  df: DataFrame,
-  catalogConf: Map[String, Any],
-  jdbcConfig: CredentialsLoader.JdbcConfig,
-  startDate: Option[String] = None
-): Unit = {
-  val writeConf = catalogConf("write_conf").asInstanceOf[Map[String, Any]]
-  val options = writeConf.get("options").map(_.asInstanceOf[Map[String, Any]]).getOrElse(Map.empty[String, Any])
-  val schema = catalogConf.getOrElse("schema", "").toString
-  val table = catalogConf("table").toString
-  val fullTable = if (schema.nonEmpty) s"`$schema`.`$table`" else s"`$table`"
-  val mode = writeConf.getOrElse("mode", "overwrite").toString
-  val batchSize = options.getOrElse("batchsize", 1000).toString
-  val numParts = options.getOrElse("numPartitions", 5).toString
-
-  // partition_date resolution:
-  //   - if the script already added a partition_date column → keep it (script wins)
-  //   - else if start_date was supplied → inject start_date - 1
-  //   - else → no partition column
-  val dfWithPartition = if (df.columns.contains("partition_date")) {
-    log.info("partition_date already set by script — skipping framework injection")
-    df
-  } else {
-    startDate match {
-      case Some(sd) =>
-        val anchor = java.time.LocalDate.parse(sd, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-        val pd = anchor.minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-        log.info(s"Injecting partition_date=$pd (start_date - 1) into DataFrame")
-        df.withColumn("partition_date", lit(pd).cast("date"))
-      case None => df
-    }
-  }
-
-  val catalogCols: List[Map[String, Any]] = writeConf.get("schema") match {
-    case Some(s) =>
-      s.asInstanceOf[List[Any]]
-       .map(_.asInstanceOf[Map[String, Any]])
-    case None =>
-      throw new IllegalArgumentException(s"write_conf.schema is a must, for table $fullTable")
-  }
-
-  val catalogColNames = catalogCols.map(_("column_name").toString)
-  val dfColNames = dfWithPartition.columns.toList
-
-  val missingInDf = catalogColNames.filterNot(dfColNames.contains)
-  val extraInDf = dfColNames.filterNot(catalogColNames.contains)
-
-  if (missingInDf.nonEmpty || extraInDf.nonEmpty) {
-    val msg = new StringBuilder(s"Schema mismatch untuk tabel $fullTable:\n")
-    if (missingInDf.nonEmpty) msg.append(s"  - in catalog but not in DataFrame : ${missingInDf.mkString(", ")}\n")
-    if (extraInDf.nonEmpty) msg.append(s"  - in DataFrame but not it catalog : ${extraInDf.mkString(", ")}\n")
-    throw new IllegalArgumentException(msg.toString)
-  }
-
-  val dfOrdered = dfWithPartition.select(catalogColNames.map(dfWithPartition(_)): _*)
-
-  // ── 4. DDL dari catalog ───────────────────────────────────────────────────
-  val colDefs = catalogCols.map { col =>
-    val name = col("column_name").toString
-    val colType = col("type").toString
-    val constraint = col.getOrElse("constraint", "").toString
-    val notNull = if (constraint.contains("not_null")) " NOT NULL" else ""
-    s"  `$name` $colType$notNull"
-  }.mkString(",\n")
-
-  val pkCols = catalogCols.filter(_.getOrElse("constraint", "").toString.contains("primary_key")).map(c => s"`${c("column_name")}`")
-  val pkClause = if (pkCols.nonEmpty) s",\n  PRIMARY KEY (${pkCols.mkString(", ")})" else ""
-
-  val ddl =
-    s"""CREATE TABLE IF NOT EXISTS $fullTable (
-       |$colDefs$pkClause
-       |) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""".stripMargin
-
-  val connProps = { val p = new java.util.Properties(); jdbcConfig.props.foreach { case (k, v) => p.setProperty(k, v) }; p }
-  val conn = java.sql.DriverManager.getConnection(jdbcConfig.url, connProps)
-
-  try {
-    log.info(s"Ensuring table exists:\n$ddl")
-    conn.createStatement().executeUpdate(ddl)
-
-    // ── 5. Partition logic ────────────────────────────────────────────────
-    // Derive the actual partition_date value from the DataFrame (set by script or injected above)
-    val effectivePartitionDates: List[String] =
-      if (dfWithPartition.columns.contains("partition_date")) {
-        dfWithPartition
-          .select("partition_date")
-          .distinct()
-          .collect()
-          .flatMap(r => Option(r.get(0)).map(_.toString))
-          .toList
-          .sorted
-      } else List.empty
-
-    if (effectivePartitionDates.nonEmpty) {
-      if (mode == "overwrite") {
-        log.info(s"Overwrite: deleting ${effectivePartitionDates.size} partition(s): ${effectivePartitionDates.mkString(", ")}")
-        effectivePartitionDates.foreach { pd =>
-          conn.createStatement().executeUpdate(
-            s"DELETE FROM $fullTable WHERE `partition_date` = '$pd'"
-          )
-          log.info(s"Deleted partition_date=$pd from $fullTable")
-        }
-      } else {
-        log.info(s"Append mode: inserting ${effectivePartitionDates.size} partition(s) = ${effectivePartitionDates.mkString(", ")} without delete")
-      }
-    } else if (mode == "overwrite") {
-      log.info(s"Full overwrite (no partition): DROP + CREATE $fullTable")
-      conn.createStatement().executeUpdate(s"DROP TABLE IF EXISTS $fullTable")
-      conn.createStatement().executeUpdate(ddl.replace("IF NOT EXISTS ", ""))
-    }
-  } finally {
-    conn.close()
-  }
-
-  // ── 6. Insert ─────────────────────────────────────────────────────────────
-  val props = jdbcConfig.props ++ Map("batchsize" -> batchSize, "numPartitions" -> numParts)
-  log.info(s"Writing to $fullTable")
-  dfOrdered.write.mode("append").jdbc(
-    url = jdbcConfig.url,
-    table = fullTable,
-    connectionProperties = { val p = new java.util.Properties(); props.foreach { case (k, v) => p.setProperty(k, v) }; p }
-  )
-  log.info(s"Write complete → $fullTable")
-}
-
-  // ── Script loader (reflection) ───────────────────────────────────────────────
-
-  /**
-   * Load a Transformer by its fully-qualified Scala object name.
-   *
-   * How it works:
-   *   - Scala compiles `object Foo` into a JVM class called `Foo$` with a
-   *     MODULE$ field that holds the singleton instance.
-   *   - We append `$` to the class name, grab MODULE$, and cast to Transformer.
-   *
-   * @param className  fully-qualified object name, e.g. "mypipeline.scripts.myjob.Transform"
-   * @return the Transformer singleton
-   */
-  def loadTransformer(className: String): Transformer = {
-    try {
-      val clazz = Class.forName(className + "$")          // Scala object → Foo$
-      val moduleField = clazz.getField("MODULE$")            // the singleton field
-      moduleField.get(null).asInstanceOf[Transformer]
-    } catch {
-      case e: ClassNotFoundException =>
-        throw new IllegalArgumentException(
-          s"Transform class not found: '$className'\n" +
-          s"Check script_location in catalog.yml — must be a fully-qualified Scala object name, e.g.:\n" +
-          s"  script_location: mypipeline.scripts.myjob.Transform", e
-        )
-      case e: ClassCastException =>
-        throw new IllegalArgumentException(
-          s"Class '$className' does not extend mypipeline.Transformer.\n" +
-          s"Add `extends Transformer` to the object definition.", e
-        )
-    }
-  }
-
-  // ── Pipeline ─────────────────────────────────────────────────────────────────
-
-  def runPipeline(
+  // ── 2. MySQL Writer with Auto-Index Logic ──────────────────────────────────
+  def writeToMySQL(
     spark: SparkSession,
+    df: DataFrame,
     catalogConf: Map[String, Any],
     jdbcConfig: CredentialsLoader.JdbcConfig,
     startDate: Option[String] = None
   ): Unit = {
+    val writeConf = catalogConf("write_conf").asInstanceOf[Map[String, Any]]
+    val options = writeConf.get("options").map(_.asInstanceOf[Map[String, Any]]).getOrElse(Map.empty[String, Any])
+    val schema = catalogConf.getOrElse("schema", "").toString
+    val table = catalogConf("table").toString
+    val fullTable = if (schema.nonEmpty) s"`$schema`.`$table`" else s"`$table`"
+    val mode = writeConf.getOrElse("mode", "overwrite").toString
+    val batchSize = options.getOrElse("batchsize", 1000).toString
+    val numParts = options.getOrElse("numPartitions", 5).toString
+
+    val catalogCols: List[Map[String, Any]] = writeConf.get("schema") match {
+      case Some(s) => s.asInstanceOf[List[Any]].map(_.asInstanceOf[Map[String, Any]])
+      case None => throw new IllegalArgumentException(s"write_conf.schema is required for table $fullTable")
+    }
+
+    val catalogColNames = catalogCols.map(_("column_name").toString)
+    val catalogHasPartitionDate = catalogColNames.contains("partition_date")
+
+    // ── Injeksi partition_date jika diperlukan ───────────────────────────────
+    val dfWithPartition = if (!catalogHasPartitionDate) {
+      df
+    } else if (df.columns.contains("partition_date")) {
+      df
+    } else {
+      startDate match {
+        case Some(sd) =>
+          val anchor = java.time.LocalDate.parse(sd, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+          val pd = anchor.minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+          log.info(s"Injecting partition_date=$pd")
+          df.withColumn("partition_date", lit(pd).cast("date"))
+        case None => df
+      }
+    }
+
+    val dfOrdered = dfWithPartition.select(catalogColNames.map(dfWithPartition(_)): _*)
+
+    // ── Membangun DDL (Table & Primary Key) ──────────────────────────────────
+    val colDefs = catalogCols.map { col =>
+      val name = col("column_name").toString
+      val colType = col("type").toString
+      val constraint = col.getOrElse("constraint", "").toString
+      val notNull = if (constraint.contains("not_null")) " NOT NULL" else ""
+      s"  `$name` $colType$notNull"
+    }.mkString(",\n")
+
+    val pkCols = catalogCols
+      .filter(_.getOrElse("constraint", "").toString.contains("primary_key"))
+      .map(c => s"`${c("column_name")}`")
+    val pkClause = if (pkCols.nonEmpty) s",\n  PRIMARY KEY (${pkCols.mkString(", ")})" else ""
+
+    val ddl = s"CREATE TABLE IF NOT EXISTS $fullTable (\n$colDefs$pkClause\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+
+    // ── Eksekusi via JDBC Dasar (DDL & Index) ────────────────────────────────
+    val connProps = new Properties()
+    jdbcConfig.props.foreach { case (k, v) => connProps.setProperty(k, v) }
+    val driverClass = jdbcConfig.props.getOrElse("driver", "com.mysql.cj.jdbc.Driver")
+    log.info(s"Registering JDBC Driver: $driverClass")
+    Class.forName(driverClass)
+    val conn = DriverManager.getConnection(jdbcConfig.url, connProps)
+
+    try {
+      log.info(s"Ensuring table exists:\n$ddl")
+      conn.createStatement().executeUpdate(ddl)
+
+      // ── LOGIKA OTOMATISASI INDEX (SINGLE COLUMN) ───────────────────────────
+      val indexCols = catalogCols.filter(c => c.getOrElse("index", false).toString.toBoolean)
+      indexCols.foreach { colMap =>
+        val colName = colMap("column_name").toString
+        val indexName = s"idx_${table}_$colName"
+        val createIndexSql = s"CREATE INDEX `$indexName` ON $fullTable (`$colName`)"
+        
+        try {
+          log.info(s"Creating index: $indexName")
+          conn.createStatement().executeUpdate(createIndexSql)
+        } catch {
+          case e: SQLException if e.getErrorCode == 1061 => 
+            log.debug(s"Index $indexName already exists, skipping.")
+          case e: Exception => 
+            log.error(s"Failed to create index $indexName: ${e.getMessage}")
+        }
+      }
+
+      // ── LOGIKA COMPOSITE INDEX ─────────────────────────────────────────────
+      val compositeIndices = writeConf.get("composite_indices") match {
+        case Some(list) => list.asInstanceOf[List[Map[String, Any]]]
+        case None => List.empty[Map[String, Any]]
+      }
+
+      compositeIndices.foreach { idxMap =>
+        val idxName = idxMap("name").toString
+        
+        // ── PARSE PREFIX INDEX: "nama_barang(100)" → `nama_barang`(100)
+        val cols = idxMap("columns").asInstanceOf[List[String]].map { c =>
+          val prefixPattern = """^(\w+)\((\d+)\)$""".r
+          c match {
+            case prefixPattern(colName, prefixLen) => s"`$colName`($prefixLen)"
+            case plain => s"`$plain`"
+          }
+        }.mkString(", ")
+        
+        val createCompositeIdxSql = s"CREATE INDEX `$idxName` ON $fullTable ($cols)"
+        
+        try {
+          log.info(s"Creating composite index: $idxName")
+          conn.createStatement().executeUpdate(createCompositeIdxSql)
+        } catch {
+          case e: SQLException if e.getErrorCode == 1061 =>
+            log.debug(s"Composite Index $idxName already exists, skipping.")
+          case e: Exception =>
+            log.error(s"Failed to create composite index $idxName: ${e.getMessage}")
+        }
+      }
+
+      // ── Manajemen Partisi (Delete/Overwrite Logic) ─────────────────────────
+      if (catalogHasPartitionDate && mode == "overwrite") {
+        val effectivePartitionDates = dfWithPartition.select("partition_date")
+          .distinct().collect().flatMap(r => Option(r.get(0)).map(_.toString)).toList
+
+        effectivePartitionDates.foreach { pd =>
+          val deleteSql = s"DELETE FROM $fullTable WHERE `partition_date` = '$pd'"
+          log.info(s"Cleaning partition: $pd")
+          conn.createStatement().executeUpdate(deleteSql)
+        }
+      } else if (mode == "overwrite" && !catalogHasPartitionDate) {
+        log.info(s"Mode overwrite tanpa partisi: Truncating $fullTable")
+        conn.createStatement().executeUpdate(s"TRUNCATE TABLE $fullTable")
+      }
+    } finally {
+      conn.close()
+    }
+
+    // ── Write Data via Spark JDBC ────────────────────────────────────────────
+    val writeProps = new Properties()
+    (jdbcConfig.props ++ Map("batchsize" -> batchSize, "numPartitions" -> numParts))
+      .foreach { case (k, v) => writeProps.setProperty(k, v) }
+
+    log.info(s"Writing data to $fullTable...")
+    dfOrdered.write.mode("append").jdbc(jdbcConfig.url, fullTable, writeProps)
+  }
+
+  // ── 3. Reflection Loader ───────────────────────────────────────────────────
+  def loadTransformer(className: String): Transformer = {
+    val clazz = Class.forName(className + "$")
+    val moduleField = clazz.getField("MODULE$")
+    moduleField.get(null).asInstanceOf[Transformer]
+  }
+
+  // ── 4. Pipeline Runner ─────────────────────────────────────────────────────
+  def runPipeline(
+    spark: SparkSession,
+    catalogConf: Map[String, Any],
+    jdbcConfig: CredentialsLoader.JdbcConfig,
+    startDate: Option[String]
+  ): Unit = {
     val jdbcWriteConfig = CredentialsLoader.loadWriteCredentials(catalogConf)
-
-    val readConf = catalogConf.getOrElse("read_conf", Map.empty[String, Any])
-      .asInstanceOf[Map[String, Any]]
-    val scriptLocation = catalogConf.getOrElse("script_location", "").toString.trim
-    require(scriptLocation.nonEmpty, "'script_location' is missing from the catalog config.")
-
+    val readConf = catalogConf.getOrElse("read_conf", Map.empty).asInstanceOf[Map[String, Any]]
+    val scriptLocation = catalogConf("script_location").toString.trim
+    
     val transformer = loadTransformer(scriptLocation)
     val df = transformer.processData(spark, readConf, jdbcConfig)
     writeToMySQL(spark, df, catalogConf, jdbcWriteConfig, startDate)
   }
 
-  // ── CLI ───────────────────────────────────────────────────────────────────────
-
-  case class Args(
-    env: String,
-    catalog: String,
-    resource: String,
-    startDate: Option[String]
-  )
+  // ── 5. Argument Parser ─────────────────────────────────────────────────────
+  case class Args(env: String, catalog: String, resource: String, startDate: Option[String])
 
   def parseArgs(argv: Array[String]): Args = {
-    var env: String = ""
-    var catalog: String = ""
-    var resource: String  = ""
-    var startDate: Option[String] = None
-
+    var env = ""; var catalog = ""; var resource = ""; var startDate: Option[String] = None
     val it = argv.iterator
     while (it.hasNext) {
       it.next() match {
-        case "--env" => env = it.next()
-        case "--catalog" => catalog = it.next()
-        case "--resource" => resource = it.next()
+        case "--env"        => env = it.next()
+        case "--catalog"    => catalog = it.next()
+        case "--resource"   => resource = it.next()
         case "--start_date" => startDate = Some(it.next())
-        case other => log.warn(s"Unknown argument: $other")
+        case _ => 
       }
     }
-
-    require(env.nonEmpty, "--env is required (dev | uat | prod)")
-    require(catalog.nonEmpty, "--catalog is required")
-    require(resource.nonEmpty,"--resource is required")
-    require(
-      Set("dev", "uat", "prod").contains(env),
-      s"--env must be one of dev, uat, prod (got: $env)"
-    )
-
+    require(env.nonEmpty && catalog.nonEmpty && resource.nonEmpty, "Missing required arguments")
     Args(env, catalog, resource, startDate)
   }
 
-  // ── Entrypoint ────────────────────────────────────────────────────────────────
-
-  def main(argv: Array[String]): Unit = {
-    val start = System.currentTimeMillis()
-    val args = parseArgs(argv)
-
-    log.info(
-      s"Starting pipeline | env=${args.env} catalog=${args.catalog} " +
-        s"resource=${args.resource} start_date=${args.startDate.getOrElse("none")}"
-    )
-
-    // Load configs
-    var catalogConf = YamlLoader.getCatalog(args.env, args.catalog)
-    val resourceConf = YamlLoader.getResource(args.env, args.resource)
-
-    // Resolve all {~~~%Y-%m-%d:day=N~~~} templates in the catalog
-    args.startDate.foreach { sd =>
-      catalogConf = DateResolver.resolveCatalogDates(catalogConf, sd)
-      log.info(s"Date templates resolved using start_date=$sd")
+  // ── 6. Entrypoint (FIXED SIGNATURE) ────────────────────────────────────────
+  def main(args: Array[String]): Unit = {
+    val startTime = System.currentTimeMillis()
+    
+    if (args.isEmpty) {
+      log.error("Usage: spark-submit --class ... --env <dev|uat|prod> --catalog <name> --resource <name>")
+      System.exit(1)
     }
 
-    // MySQL JDBC connection — loaded from credentials/credentials.yml
-    val jdbcConfig = CredentialsLoader.loadCredentials(catalogConf)
-    log.info(
-      s"Credentials loaded for key='${catalogConf("credentials_key")}' → " +
-        jdbcConfig.url.split("\\?").head
-    )
+    val parsedArgs = parseArgs(args)
+    log.info(s"Starting Pipeline: env=${parsedArgs.env}, catalog=${parsedArgs.catalog}")
 
-    // Start Spark
+    // Load Configurations
+    var catalogConf = YamlLoader.getCatalog(parsedArgs.env, parsedArgs.catalog)
+    val resourceConf = YamlLoader.getResource(parsedArgs.env, parsedArgs.resource)
+
+    // Resolve Date Templates
+    parsedArgs.startDate.foreach { sd =>
+      catalogConf = DateResolver.resolveCatalogDates(catalogConf, sd)
+    }
+
+    val jdbcConfig = CredentialsLoader.loadCredentials(catalogConf)
     val spark = createSparkSession(resourceConf)
-    log.info(s"Spark started | app=${spark.sparkContext.applicationId}")
 
     try {
-      runPipeline(spark, catalogConf, jdbcConfig, args.startDate)
+      runPipeline(spark, catalogConf, jdbcConfig, parsedArgs.startDate)
+      log.info("Pipeline completed successfully.")
     } catch {
       case e: Exception =>
-        log.error("Pipeline failed.", e)
+        log.error("Pipeline failed!", e)
         System.exit(1)
     } finally {
-      val elapsed = (System.currentTimeMillis() - start) / 1000
-      log.info(s"Done in ${elapsed / 60}m ${elapsed % 60}s")
+      val elapsed = (System.currentTimeMillis() - startTime) / 1000
+      log.info(s"Execution time: ${elapsed / 60}m ${elapsed % 60}s")
       spark.sparkContext.stop()
     }
   }

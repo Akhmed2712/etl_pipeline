@@ -1,0 +1,376 @@
+_mysql_conf_uat: &mysql_conf_uat
+  layer: mysql
+  env: dev
+  credentials_key: mysqldev    # matches key in credentials/credentials.yml
+  database: simrs_astrini_bai
+
+_mysql_conf_local: &mysql_conf_local
+  layer: mysql
+  env: dev
+  credentials_key: mysqllocal    # matches key in credentials/credentials.yml
+  database: farmagitechs     # used to build jdbc_url: jdbc:mysql://host:port/<database>
+
+_mysql_conf_local_olap: &mysql_conf_local_olap
+  layer: mysql
+  env: dev
+  credentials_key: mysqllocalolap    # matches key in credentials/credentials.yml
+  database: olap 
+
+fg_dim_pengemasan_barang:
+  <<: *mysql_conf_uat
+  table: fg_dim_pengemasan_barang
+  schema: stga
+  write_credentials_key: mysqllocalolap
+  write_database: olap
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_dim_pengemasan_barang.FgDimPengemasanBarang
+
+  read_conf:
+    dc_barang:
+      database: simrs_astrini_bai
+      table: dc_barang
+
+    dc_kemasan_barang:
+      database: simrs_astrini_bai
+      table: dc_kemasan_barang
+
+    dc_sediaan:
+      database: simrs_astrini_bai
+      table: dc_sediaan
+
+    dc_golongan:
+      database: simrs_astrini_bai
+      table: dc_golongan
+
+    dc_kategori_barang:
+      database: simrs_astrini_bai
+      table: dc_kategori_barang
+
+    dc_barang_paket:
+      database: simrs_astrini_bai
+      table: dc_barang_paket
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: id_barang_paket
+        type: bigint
+      - column_name: nama_barang
+        type: varchar(500)
+      - column_name: sediaan
+        type: varchar(50)
+      - column_name: adm_r
+        type: varchar(50)
+      - column_name: golongan
+        type: varchar(50)
+      - column_name: formularium
+        type: varchar(5)
+      - column_name: kategori
+        type: varchar(50)
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_dim_penjamin:
+  <<: *mysql_conf_uat
+  table: fg_dim_penjamin
+  schema: simrs_dw_stga
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_dim_penjamin.FgDimPenjamin
+
+  read_conf:
+    dc_penjamin:
+      database: simrs_astrini_bai
+      table: dc_penjamin
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: nama
+        type: varchar(100)
+      - column_name: jenis
+        type: varchar(50)
+      - column_name: aktif_apm
+        type: varchar(5)
+      - column_name: status_aktif
+        type: int
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_dim_waktu:
+  <<: *mysql_conf_local_olap
+  schema: stga
+  table: fg_dim_waktu
+  script_location: etl_pipeline.scripts.fg_dim_waktu.FgDimWaktu
+  read_conf:
+    start_year: 2020
+    end_year: 2030
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: int
+        constraint: primary_key,not_null
+      - column_name: tanggal
+        type: date
+        index: true
+      - column_name: hari
+        type: tinyint
+      - column_name: nama_hari
+        type: varchar(20)
+      - column_name: minggu_ke
+        type: tinyint
+      - column_name: bulan
+        type: tinyint
+      - column_name: nama_bulan
+        type: varchar(20)
+      - column_name: triwulan
+        type: tinyint
+        index: true
+      - column_name: tahun
+        type: smallint
+        index: true
+      - column_name: is_weekend
+        type: boolean
+
+fg_fact_penjualan_barang:
+  <<: *mysql_conf_uat
+  table: fg_fact_penjualan_barang
+  schema: simrs_dw_stga
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_fact_penjualan_barang.FgFactPenjualanBarang
+  partitionColumn: "id"
+  lowerBound: "1"
+  upperBound: "1000000"
+  numPartitions: 20
+
+  read_conf:
+    dc_penjualan:
+      database: simrs_astrini_bai
+      table: dc_penjualan
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
+
+    dc_detail_penjualan:
+      database: simrs_astrini_bai
+      table: dc_detail_penjualan
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
+
+    dc_layanan_pendaftaran:
+      database: simrs_astrini_bai
+      table: dc_layanan_pendaftaran
+      filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
+
+    fg_dim_penjamin:
+      database: simrs_astrini_bai
+      table: fg_dim_penjamin
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp 
+      - column_name: id_layanan_pendaftaran
+        type: bigint 
+      - column_name: jenis_layanan
+        type: varchar(50) 
+      - column_name: id_unit_layanan
+        type: int
+      - column_name: cara_bayar
+        type: varchar(50)
+      - column_name: id_penjamin
+        type: bigint
+      - column_name: id_kemasan
+        type: bigint
+      - column_name: id_barang_paket
+        type: bigint  
+      - column_name: jumlah
+        type: decimal(10,2)
+      - column_name: harga_jual
+        type: decimal(10,2)
+      - column_name: hpp
+        type: decimal(10,2)
+      - column_name: partition_date
+        type: date
+        index: true  
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_fact_retur_barang:
+  <<: *mysql_conf_uat
+  table: fg_fact_retur_barang
+  schema: simrs_dw_stga
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_fact_retur_barang.FgFactReturBarang
+
+  read_conf:
+    dc_retur_penjualan:
+      database: simrs_astrini_bai
+      table: dc_retur_penjualan
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
+
+    dc_detur_penjualan:
+      database: simrs_astrini_bai
+      table: dc_detur_penjualan
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
+
+    dc_layanan_pendaftaran:
+      database: simrs_astrini_bai
+      table: dc_layanan_pendaftaran
+      filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp
+      - column_name: id_layanan_pendaftaran
+        type: bigint
+      - column_name: id_kemasan
+        type: bigint
+      - column_name: jumlah
+        type: decimal(10,2)
+      - column_name: partition_date
+        type: date
+        index: true  
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_dim_layanan:
+  <<: *mysql_conf_uat
+  table: fg_dim_layanan
+  schema: stga
+  write_credentials_key: mysqllocalolap
+  write_database: olap
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_dim_layanan.FgDimLayanan
+
+  read_conf:
+    dc_spesialisasi:
+      database: simrs_astrini_bai
+      table: dc_spesialisasi
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: nama
+        type: varchar(50)
+
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_fact_rekap_penggunaan_barang:
+  <<: *mysql_conf_local_olap
+  table: fg_fact_rekap_penggunaan_barang
+  schema: stga
+  script_type: scala
+  script_location: etl_pipeline.scripts.fg_fact_rekap_penggunaan_barang.FgFactRekapPenggunaan
+
+  read_conf:
+    fg_fact_penjualan_barang:
+      database: stga
+      table: fg_fact_penjualan_barang
+      filter: "partition_date < '{~~~%Y-%m-%d:day=1~~~}'"
+
+    fg_fact_retur_barang:
+      database: stga
+      table: fg_fact_retur_barang
+
+    fg_dim_pengemasan_barang:
+      database: stga
+      table: fg_dim_pengemasan_barang
+
+    fg_dim_penjamin:
+      database: stga
+      table: fg_dim_penjamin
+
+    fg_dim_layanan:
+      database: stga
+      table: fg_dim_layanan
+
+    fg_dim_waktu:
+      database: stga
+      table: fg_dim_waktu
+
+  write_conf:
+    mode: overwrite
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp
+      - column_name: kategori
+        type: varchar(50)  
+      - column_name: nama_barang
+        type: varchar(1000)
+      - column_name: jenis_layanan
+        type: varchar(50)
+      - column_name: klinik
+        type: varchar(50)
+      - column_name: cara_bayar
+        type: varchar(50)
+      - column_name: penjamin
+        type: varchar(50)
+      - column_name: jumlah
+        type: decimal(10,2)
+      - column_name: jumlah_retur
+        type: decimal(10,2)
+      - column_name: jumlah_pakai
+        type: decimal(10,2)
+      - column_name: hpp
+        type: decimal(10,2)
+      - column_name: harga_jual
+        type: decimal(10,2)
+      - column_name: subtotal_hpp
+        type: decimal(16,2)
+      - column_name: subtotal_harga_jual
+        type: decimal(16,2)
+      - column_name: tahun
+        type: smallint
+      - column_name: triwulan
+        type: varchar(5)
+      - column_name: partition_date
+        type: date
+        index: true
+
+    composite_indices:
+      - name: "idx_covering_semua"
+        columns: [
+          "tahun",
+          "triwulan",
+          "jenis_layanan",
+          "cara_bayar",
+          "penjamin",
+          "kategori",
+          "klinik",
+          "partition_date",
+          "nama_barang(100)",
+          "jumlah",
+          "jumlah_retur",
+          "jumlah_pakai",
+          "subtotal_harga_jual",
+          "subtotal_hpp"
+        ]
+
+    options:
+      batchsize: 1000
+      numPartitions: 20

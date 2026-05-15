@@ -5,6 +5,8 @@ _base_conf: &base_conf
   spark.sql.session.timeZone: Asia/Jakarta
   spark.driver.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
   spark.executor.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+  spark.sql.ansi.enabled: false
+  spark.sql.legacy.timeParserPolicy: LEGACY
 
 # ──────────────────────────────────────────────────────────────────
 # Presets  (anchor + override pattern, same as original)
@@ -32,4 +34,39 @@ my_orders_job:
 tes_pendaftaran:
   <<: *low
   spark.app.name: my_orders_job
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_pengemasan_barang:
+  <<: *low
+  spark.app.name: fg_dim_pengemasan_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_penjualan_barang:
+  <<: *low
+  spark.app.name: fg_fact_penjualan_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_retur_barang:
+  <<: *low
+  spark.app.name: fg_fact_retur_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_penjamin:
+  <<: *low
+  spark.app.name: fg_dim_penjamin
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_layanan:
+  <<: *low
+  spark.app.name: fg_dim_layanan
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_rekap_penggunaan_barang_non_paket:
+  <<: *low
+  spark.app.name: fg_fact_rekap_penggunaan_barang_non_paket
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_waktu:
+  <<: *low
+  spark.app.name: fg_dim_waktu
   spark.sql.shuffle.partitions: 10

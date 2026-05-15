@@ -1,0 +1,75 @@
+erDiagram
+
+  %% ─── TARGET FACT TABLE ───────────────────────────────────────────────────
+
+  fg_fact_penjualan_barang {
+    bigint    id                      PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    varchar   jenis_layanan
+    int       id_unit_layanan
+    varchar   cara_bayar
+    bigint    id_penjamin
+    bigint    id_kemasan
+    bigint    id_barang_paket
+    decimal   jumlah
+    decimal   harga_jual
+    decimal   hpp
+    date      partition_date
+  }
+
+  %% ─── SOURCE TABLES ───────────────────────────────────────────────────────
+
+  dc_penjualan {
+    bigint    id                      PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    varchar   jenis
+  }
+
+  dc_detail_penjualan {
+    bigint    id                      PK
+    bigint    id_penjualan            FK
+    bigint    id_kemasan
+    bigint    id_barang_paket
+    decimal   qty
+    decimal   harga_jual
+    decimal   hpp
+  }
+
+  dc_layanan_pendaftaran {
+    bigint    id                      PK
+    timestamp waktu
+    bigint    id_penjamin
+    int       id_unit_layanan
+    varchar   jenis
+    varchar   cara_bayar
+  }
+
+  fg_dim_penjamin {
+    bigint    id                      PK
+    varchar   nama
+    varchar   jenis
+  }
+
+  %% ─── SOURCE RELATIONSHIPS ────────────────────────────────────────────────
+
+  dc_penjualan ||--o{ dc_detail_penjualan     : "id = id_penjualan"
+  dc_penjualan }o--|| dc_layanan_pendaftaran  : "id_layanan_pendaftaran = id"
+  dc_layanan_pendaftaran }o--|| fg_dim_penjamin : "id_penjamin = id"
+
+  %% ─── ETL LINEAGE TO FACT TABLE ───────────────────────────────────────────
+
+  dc_penjualan }o--|| fg_fact_penjualan_barang : "waktu, id_layanan_pendaftaran"
+  dc_detail_penjualan }o--|| fg_fact_penjualan_barang : "id_kemasan, qty → jumlah, harga_jual, hpp"
+  dc_layanan_pendaftaran }o--|| fg_fact_penjualan_barang : "jenis → jenis_layanan, id_unit_layanan, cara_bayar"
+  fg_dim_penjamin }o--|| fg_fact_penjualan_barang : "fallback jenis → cara_bayar"
+
+  %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
+
+  %% qty                  → jumlah
+  %% jenis                → jenis_layanan
+  %% substring(waktu,1,10) → partition_date
+  %% cara_bayar fallback:
+  %%   if dc_layanan_pendaftaran.cara_bayar is null/blank
+  %%   then use fg_dim_penjamin.jenis

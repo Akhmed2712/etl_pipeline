@@ -1,0 +1,24 @@
+erDiagram
+
+  %% ─── TARGET DIMENSION TABLE ──────────────────────────────────────────────
+
+  fg_dim_layanan {
+    bigint  id      PK
+    varchar nama
+  }
+
+  %% ─── SOURCE TABLE ────────────────────────────────────────────────────────
+
+  dc_spesialisasi {
+    bigint  id      PK
+    varchar nama
+  }
+
+  %% ─── ETL LINEAGE ─────────────────────────────────────────────────────────
+
+  dc_spesialisasi }o--|| fg_dim_layanan : "direct mapping"
+
+  %% ─── COLUMN MAPPING DOCUMENTATION ────────────────────────────────────────
+
+  %% id    → id
+  %% nama  → nama

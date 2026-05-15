@@ -1,0 +1,52 @@
+erDiagram
+
+  %% ─── TARGET FACT TABLE ───────────────────────────────────────────────────
+
+  fg_fact_retur_barang {
+    bigint    id                         PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    bigint    id_kemasan
+    decimal   jumlah
+    date      partition_date
+  }
+
+  %% ─── SOURCE TABLES ───────────────────────────────────────────────────────
+
+  dc_retur_penjualan {
+    bigint    id                         PK
+    timestamp waktu
+  }
+
+  dc_detur_penjualan {
+    bigint    id                         PK
+    bigint    id_retur_penjualan         FK
+    bigint    id_layanan_pendaftaran
+    bigint    id_kemasan
+    decimal   qty
+  }
+
+  dc_layanan_pendaftaran {
+    bigint    id                         PK
+    timestamp waktu
+  }
+
+  %% ─── SOURCE RELATIONSHIPS ────────────────────────────────────────────────
+
+  dc_retur_penjualan ||--o{ dc_detur_penjualan : "id = id_retur_penjualan"
+
+  dc_detur_penjualan }o--|| dc_layanan_pendaftaran : "id_layanan_pendaftaran = id"
+
+  %% ─── ETL LINEAGE TO FACT TABLE ───────────────────────────────────────────
+
+  dc_retur_penjualan }o--|| fg_fact_retur_barang : "waktu"
+
+  dc_detur_penjualan }o--|| fg_fact_retur_barang : "id, id_layanan_pendaftaran, id_kemasan, qty → jumlah"
+
+  dc_layanan_pendaftaran }o--|| fg_fact_retur_barang : "lookup enrichment"
+
+  %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
+
+  %% qty                   → jumlah
+  %% substring(waktu,1,10) → partition_date
+  %% only rows with non-null id retained

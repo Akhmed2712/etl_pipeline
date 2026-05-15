@@ -1,0 +1,109 @@
+erDiagram
+
+  %% ─── FACT TABLES ─────────────────────────────────────────────────────────
+
+  fg_fact_rekap_penggunaan_barang_non_paket {
+    bigint    id               PK
+    timestamp waktu
+    varchar   kategori
+    varchar   nama_barang
+    varchar   jenis_layanan
+    varchar   klinik
+    varchar   cara_bayar
+    varchar   penjamin
+    decimal   jumlah
+    decimal   jumlah_retur
+    decimal   jumlah_pakai
+    decimal   hpp
+    decimal   harga_jual
+    decimal   subtotal_hpp
+    decimal   subtotal_harga_jual
+    smallint  tahun
+    varchar   triwulan
+    date      partition_date
+  }
+
+  fg_fact_penjualan_barang {
+    bigint    id                      PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    varchar   jenis_layanan
+    int       id_unit_layanan         FK
+    varchar   cara_bayar
+    bigint    id_penjamin             FK
+    bigint    id_kemasan              FK
+    bigint    id_barang_paket         FK
+    decimal   jumlah
+    decimal   harga_jual
+    decimal   hpp
+    date      partition_date
+  }
+
+  fg_fact_retur_barang {
+    bigint    id                      PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    bigint    id_kemasan              FK
+    decimal   jumlah
+    date      partition_date
+  }
+
+  %% ─── DIMENSION TABLES ────────────────────────────────────────────────────
+
+  fg_dim_pengemasan_barang {
+    bigint  id             PK
+    bigint  id_barang_paket
+    varchar nama_barang
+    varchar sediaan
+    varchar adm_r
+    varchar golongan
+    varchar formularium
+    varchar kategori
+  }
+
+  fg_dim_penjamin {
+    bigint  id          PK
+    varchar nama
+    varchar jenis
+    varchar aktif_apm
+    int     status_aktif
+  }
+
+  fg_dim_layanan {
+    bigint  id   PK
+    varchar nama
+  }
+
+  fg_dim_waktu {
+    int     id         PK
+    date    tanggal
+    tinyint hari
+    varchar nama_hari
+    tinyint minggu_ke
+    tinyint bulan
+    varchar nama_bulan
+    tinyint triwulan
+    smallint tahun
+    boolean is_weekend
+  }
+
+  %% ─── RELATIONSHIPS ───────────────────────────────────────────────────────
+
+  %% fg_fact_penjualan_barang → dimensions
+  fg_fact_penjualan_barang }o--|| fg_dim_pengemasan_barang : "id_kemasan = id"
+  fg_fact_penjualan_barang }o--|| fg_dim_penjamin          : "id_penjamin = id"
+  fg_fact_penjualan_barang }o--|| fg_dim_layanan           : "id_unit_layanan = id"
+  fg_fact_penjualan_barang }o--|| fg_dim_waktu             : "partition_date = tanggal"
+
+  %% fg_fact_retur_barang → dimensions
+  fg_fact_retur_barang }o--|| fg_dim_pengemasan_barang : "id_kemasan = id"
+
+  %% fg_fact_rekap → dimensions (denormalised, values pre-joined at write time)
+  fg_fact_rekap_penggunaan_barang_non_paket }o--|| fg_dim_pengemasan_barang : "id_kemasan / id_barang_paket"
+  fg_fact_rekap_penggunaan_barang_non_paket }o--|| fg_dim_penjamin          : "penjamin"
+  fg_fact_rekap_penggunaan_barang_non_paket }o--|| fg_dim_layanan           : "klinik"
+  fg_fact_rekap_penggunaan_barang_non_paket }o--|| fg_dim_waktu             : "partition_date = tanggal"
+
+  %% fg_fact_rekap → source fact tables (aggregation lineage)
+  fg_fact_rekap_penggunaan_barang_non_paket }o--o{ fg_fact_penjualan_barang : "aggregated from"
+  fg_fact_rekap_penggunaan_barang_non_paket }o--o{ fg_fact_retur_barang     : "aggregated from"
