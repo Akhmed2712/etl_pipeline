@@ -1,0 +1,103 @@
+erDiagram
+  %% ─── TARGET FACT TABLE ───────────────────────────────────────────────────
+  fg_agg_rekap_penggunaan_barang {
+    bigint    id               PK
+    timestamp waktu
+    varchar   kategori
+    varchar   nama_barang
+    varchar   nobatch
+    varchar   nama_dokter
+    varchar   spesialisasi
+    varchar   jenis_layanan
+    varchar   klinik
+    varchar   cara_bayar
+    varchar   penjamin
+    decimal   jumlah
+    decimal   jumlah_retur
+    decimal   jumlah_pakai
+    decimal   hna
+    decimal   hpp
+    decimal   harga_jual
+    decimal   subtotal_hna
+    decimal   subtotal_hpp
+    decimal   subtotal_harga_jual
+    smallint  tahun
+    varchar   triwulan
+    varchar   nama_bulan
+    date      partition_date
+  }
+  %% ─── SOURCE FACT TABLES ──────────────────────────────────────────────────
+  fg_fact_penjualan_barang {
+    bigint    id                     PK
+    timestamp waktu
+    bigint    id_layanan_pendaftaran
+    bigint    id_dokter
+    bigint    id_kemasan
+    bigint    id_barang_paket
+    varchar   nobatch
+    bigint    id_penjamin
+    int       id_unit_layanan
+    decimal   hna
+    decimal   hpp
+    decimal   harga_jual
+    varchar   jenis_layanan
+    varchar   cara_bayar
+    date      partition_date
+  }
+  fg_fact_retur_barang {
+    bigint    id                     PK
+    bigint    id_layanan_pendaftaran
+    bigint    id_kemasan
+    decimal   jumlah
+  }
+  %% ─── SOURCE DIM TABLES ───────────────────────────────────────────────────
+  fg_dim_pengemasan_barang {
+    bigint  id              PK
+    bigint  id_barang_paket
+    varchar nama_barang
+    varchar kategori
+  }
+  fg_dim_nakes {
+    bigint  id    PK
+    varchar nama
+    varchar spesialisasi
+  }
+  dc_penjamin {
+    bigint  id    PK
+    varchar nama
+  }
+  dc_spesialisasi {
+    bigint  id    PK
+    varchar nama
+  }
+  fg_dim_waktu {
+    int     id    PK
+    date    tanggal
+    smallint tahun
+    varchar  triwulan
+    varchar  nama_bulan
+  }
+  %% ─── RELATIONSHIPS ───────────────────────────────────────────────────────
+  fg_fact_penjualan_barang   }o--o{ fg_agg_rekap_penggunaan_barang : "pre-aggregated (GROUP BY grain)"
+  fg_fact_retur_barang       }o--o{ fg_agg_rekap_penggunaan_barang : "LEFT JOIN grouped by id_kemasan + id_layanan_pendaftaran"
+  fg_dim_pengemasan_barang   }o--|| fg_agg_rekap_penggunaan_barang : "INNER — id_kemasan=id OR id_barang_paket=id_barang_paket"
+  fg_dim_nakes               }o--|| fg_agg_rekap_penggunaan_barang : "INNER — id_dokter = id → nama_dokter, spesialisasi"
+  dc_penjamin                }o--|| fg_agg_rekap_penggunaan_barang : "LEFT — id_penjamin = id → penjamin"
+  dc_spesialisasi            }o--|| fg_agg_rekap_penggunaan_barang : "LEFT — id_unit_layanan = id → klinik"
+  fg_dim_waktu               }o--|| fg_agg_rekap_penggunaan_barang : "INNER — partition_date = tanggal → tahun, triwulan, nama_bulan"
+  %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
+  %% Source grain       = fg_fact_penjualan_barang after GROUP BY:
+  %%                      waktu, id_layanan_pendaftaran, id_dokter, id_kemasan,
+  %%                      id_barang_paket, nobatch, id_penjamin, id_unit_layanan,
+  %%                      hna, hpp, harga_jual, jenis_layanan, cara_bayar
+  %% filter             = partition_date < current_month_start
+  %% jumlah             = SUM(jumlah) from groupBy
+  %% jumlah_retur       = COALESCE(SUM(retur.jumlah), 0)
+  %% jumlah_pakai       = jumlah - jumlah_retur
+  %% subtotal_hna       = hna * jumlah_pakai
+  %% subtotal_hpp       = hpp * jumlah_pakai
+  %% subtotal_harga_jual= harga_jual * jumlah_pakai
+  %% triwulan           = CONCAT('Q', fg_dim_waktu.triwulan)  e.g. Q1
+  %% id                 = COALESCE(CAST(CONCAT(REPLACE(COALESCE(partition_date,'19700101'),'-',''), monotonically_increasing_id()) AS BIGINT), monotonically_increasing_id())
+  %% klinik source      = dc_spesialisasi (direct, NOT fg_dim_layanan)
+  %% penjamin source    = dc_penjamin (direct, NOT fg_dim_penjamin)

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage: ./run_spark.sh <jar_name> <catalog> <resource> <start_date>
-JAR_NAME=${1:-"etl_pipeline-assembly-1.0.0.jar"}
+JAR_NAME=${1:-"etl-pipeline-assembly-1.0.0.jar"}
 CATALOG=${2:-"my_orders_job"}
 RESOURCE=${3:-"my_orders_job"}
 START_DATE=${4:-"2024-01-15"}

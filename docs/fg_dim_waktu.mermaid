@@ -1,0 +1,33 @@
+erDiagram
+  %% ─── TARGET DIM TABLE ────────────────────────────────────────────────────
+  fg_dim_waktu {
+    int      id            PK
+    date     tanggal
+    tinyint  hari
+    varchar  nama_hari
+    tinyint  minggu_ke
+    tinyint  bulan
+    varchar  nama_bulan
+    tinyint  triwulan
+    smallint tahun
+    boolean  is_weekend
+  }
+  %% ─── SOURCE ──────────────────────────────────────────────────────────────
+  SPARK_RANGE_GENERATED {
+    int seq_index
+  }
+  %% ─── LINEAGE ─────────────────────────────────────────────────────────────
+  SPARK_RANGE_GENERATED ||--|| fg_dim_waktu : "generates all rows"
+  %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
+  %% No DB source. Pure Spark-generated date spine.
+  %% id              = date_format(tanggal,'yyyyMMdd').cast('int')
+  %% tanggal         = date_add(start_date, seq_index)
+  %% hari            = dayofmonth(tanggal)
+  %% nama_hari       = Indonesian day name via when() — Senin to Minggu
+  %% minggu_ke       = weekofyear(tanggal)
+  %% bulan           = month(tanggal)
+  %% nama_bulan      = Indonesian month name via when() — Januari to Desember
+  %% triwulan        = quarter(tanggal)  [stored as int 1–4]
+  %% tahun           = year(tanggal)
+  %% is_weekend      = WHEN dayofweek IN (1,7) THEN true ELSE false
+  %% Default range   = 2020-01-01 to 2030-12-31 (configurable via catalog.yml)

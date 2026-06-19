@@ -7,3 +7,5 @@ target/
 *.log
 .metals/
 .vscode/
+dbt*
+docs/*drawio

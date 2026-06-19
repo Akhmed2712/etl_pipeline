@@ -1,72 +1,93 @@
 erDiagram
-
-  %% ─── TARGET DIMENSION TABLE ──────────────────────────────────────────────
-
+  %% ─── TARGET DIM TABLE ────────────────────────────────────────────────────
   fg_dim_pengemasan_barang {
     bigint  id                PK
     bigint  id_barang_paket
+    bigint  id_barang
     varchar nama_barang
     varchar sediaan
     varchar adm_r
     varchar golongan
     varchar formularium
     varchar kategori
+    varchar satuan
+    decimal hna
+    decimal hpp
+    decimal harga_jual
+    decimal margin_non_resep
+    decimal margin_resep
+    decimal margin_resep_rajal
+    decimal margin_plus_ppn
   }
-
-  %% ─── SOURCE TABLES ───────────────────────────────────────────────────────
-
+ 
+  %% ─── UNION NODE ──────────────────────────────────────────────────────────
+  UNION_pengemasan_barang {
+    string case_1 "Standard — grain: dc_kemasan_barang"
+    string case_2 "Paket    — grain: dc_barang_paket"
+  }
+ 
+  %% ─── CASE 1 BRANCH: STANDARD ─────────────────────────────────────────────
+  dc_kemasan_barang {
+    bigint id          PK
+    bigint id_barang   FK
+    bigint id_satuan   FK
+  }
   dc_barang {
-    bigint  id            PK
-    bigint  id_sediaan    FK
-    bigint  id_golongan   FK
-    bigint  id_kategori   FK
-    varchar nama_barang
+    bigint  id                PK
+    bigint  id_sediaan        FK
+    bigint  id_golongan       FK
+    bigint  id_kategori       FK
+    varchar nama_lengkap
     varchar adm_r
     varchar formularium
+    decimal hna
+    decimal hpp
+    decimal harga_jual
+    decimal margin_non_resep
+    decimal margin_resep
+    decimal margin_resep_rajal
+    decimal plus_ppn
   }
-
-  dc_kemasan_barang {
-    bigint id         PK
-    bigint id_barang  FK
-  }
-
   dc_sediaan {
-    bigint  id             PK
-    varchar nama_sediaan
+    bigint  id    PK
+    varchar nama
   }
-
   dc_golongan {
-    bigint  id              PK
-    varchar nama_golongan
+    bigint  id    PK
+    varchar nama
   }
-
   dc_kategori_barang {
-    bigint  id             PK
-    varchar nama_kategori
+    bigint  id    PK
+    varchar nama
   }
-
+  dc_satuan {
+    bigint  id    PK
+    varchar nama
+  }
+ 
+  %% ─── CASE 2 BRANCH: PAKET ────────────────────────────────────────────────
   dc_barang_paket {
-    bigint  id          PK
-    varchar nama_paket
+    bigint  id    PK
+    varchar nama
   }
-
+ 
   %% ─── SOURCE RELATIONSHIPS ────────────────────────────────────────────────
-
-  dc_barang ||--o{ dc_kemasan_barang  : "id = id_barang"
+  dc_barang ||--o{ dc_kemasan_barang   : "id = id_barang"
   dc_barang }o--|| dc_sediaan         : "id_sediaan = id"
   dc_barang }o--|| dc_golongan        : "id_golongan = id"
   dc_barang }o--|| dc_kategori_barang : "id_kategori = id"
-
-  %% ─── ETL LINEAGE TO TARGET DIMENSION ─────────────────────────────────────
-
-  %% Standard item flow
-  dc_kemasan_barang }o--|| fg_dim_pengemasan_barang : "maps to standard item"
-
-  %% Attribute enrichment
-  dc_barang }o--|| fg_dim_pengemasan_barang : "nama_barang, adm_r, formularium"
-  dc_sediaan }o--|| fg_dim_pengemasan_barang : "nama_sediaan → sediaan"
-  dc_golongan }o--|| fg_dim_pengemasan_barang : "nama_golongan → golongan"
-  dc_kategori_barang }o--|| fg_dim_pengemasan_barang : "nama_kategori → kategori"
-
-  %% Package item flow
-  dc_barang_paket }o--|| fg_dim_pengemasan_barang : "maps to package item"
+  dc_kemasan_barang }o--|| dc_satuan  : "id_satuan = id"
+ 
+  %% ─── CASE 1 → UNION ──────────────────────────────────────────────────────
+  dc_kemasan_barang  }o--|| UNION_pengemasan_barang : "id → id, id_barang"
+  dc_barang          }o--|| UNION_pengemasan_barang : "nama_lengkap → nama_barang, adm_r, formularium, hna, hpp, harga_jual, margins, plus_ppn → margin_plus_ppn"
+  dc_sediaan         }o--|| UNION_pengemasan_barang : "nama → sediaan"
+  dc_golongan        }o--|| UNION_pengemasan_barang : "nama → golongan"
+  dc_kategori_barang }o--|| UNION_pengemasan_barang : "nama → kategori"
+  dc_satuan          }o--|| UNION_pengemasan_barang : "nama → satuan"
+ 
+  %% ─── CASE 2 → UNION ──────────────────────────────────────────────────────
+  dc_barang_paket    }o--|| UNION_pengemasan_barang : "id → id_barang_paket, nama → nama_barang, kategori = literal Paket, id_barang/sediaan/adm_r/golongan/formularium/prices = NULL, id = CAST(CONCAT(REPLACE(current_date,'-',''), id_barang_paket) AS BIGINT)"
+ 
+  %% ─── UNION → TARGET ──────────────────────────────────────────────────────
+  UNION_pengemasan_barang ||--|| fg_dim_pengemasan_barang : "unionByName (allowMissingColumns)"
