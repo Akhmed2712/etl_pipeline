@@ -9,68 +9,112 @@ import scala.jdk.CollectionConverters._
 /**
  * DateResolver
  *
- * Resolves Triton-style date template syntax found in catalog YAML values:
+ * Supported syntax:
  *
- *   {~~~%Y-%m-%d:day=1~~~}  →  start_date − 1 day, formatted as yyyy-MM-dd
- *   {~~~%Y-%m-%d:day=0~~~}  →  start_date − 0 days
- *   {~~~%Y-%m-01:day=1~~~}  →  start_date − 1 day, literal "01" day
+ *   {~~~%Y-%m-%d:day=1~~~}
+ *   {~~~%Y-%m-%d:month=1~~~}
+ *   {~~~%Y-%m-%d:year=1~~~}
  *
- * strftime tokens supported: %Y, %m, %d
+ * Example:
+ *   anchor = 2024-05-21
+ *
+ *   {~~~%Y-%m-%d:day=1~~~}   -> 2024-05-20
+ *   {~~~%Y-%m-%d:month=1~~~} -> 2024-04-21
+ *   {~~~%Y-%m-%d:year=1~~~}  -> 2023-05-21
+ *
+ * Supported strftime tokens:
+ *   %Y %m %d
  */
 object DateResolver {
 
-  // Matches {~~~<format>:day=<N>~~~}
-  private val TemplateRe: Regex = """\{~~~(.+?):day=(\d+)~~~\}""".r
+  // Matches:
+  // {~~~<format>:day=1~~~}
+  // {~~~<format>:month=1~~~}
+  // {~~~<format>:year=1~~~}
+  private val TemplateRe: Regex =
+    """\{~~~(.+?):(day|month|year)=(-?\d+)~~~\}""".r
 
-  /** Convert a Python strftime format string to Java DateTimeFormatter pattern. */
+  /** Convert Python strftime to Java formatter pattern */
   private def strftimeToJava(fmt: String): String =
     fmt
       .replace("%Y", "yyyy")
       .replace("%m", "MM")
       .replace("%d", "dd")
 
-  /** Replace all {~~~...~~~} templates in a single string value. */
+  /** Apply date offset based on unit */
+  private def applyOffset(
+    date: LocalDate,
+    unit: String,
+    offset: Int
+  ): LocalDate = {
+    unit match {
+      case "day" =>
+        date.minusDays(offset.toLong)
+
+      case "month" =>
+        date.minusMonths(offset.toLong)
+
+      case "year" =>
+        date.minusYears(offset.toLong)
+
+      case _ =>
+        throw new IllegalArgumentException(s"Unsupported unit: $unit")
+    }
+  }
+
+  /** Resolve all templates in a string */
   private def resolveValue(value: String, anchor: LocalDate): String =
     TemplateRe.replaceAllIn(value, m => {
-      val fmt = m.group(1)            // e.g. "%Y-%m-%d" or "%Y-%m-01"
-      val offset = m.group(2).toInt      // days to subtract
-      val resolved = anchor.minusDays(offset.toLong)
+      val fmt = m.group(1)
+      val unit = m.group(2)
+      val offset = m.group(3).toInt
+
+      val resolved = applyOffset(anchor, unit, offset)
+
       val pattern = DateTimeFormatter.ofPattern(strftimeToJava(fmt))
+
       resolved.format(pattern)
     })
 
-  /** Recursively walk a catalog Map/List and resolve every string value. */
+  /** Recursively resolve templates inside catalog object */
   def walk(node: Any, anchor: LocalDate): Any = node match {
-    case m: java.util.Map[_, _] =>                          // ← add this case
-      m.asInstanceOf[java.util.Map[String, Any]].asScala
+
+    case m: java.util.Map[_, _] =>
+      m.asInstanceOf[java.util.Map[String, Any]]
+        .asScala
         .map { case (k, v) => k -> walk(v, anchor) }
         .toMap
+
     case m: Map[_, _] =>
-      m.asInstanceOf[Map[String, Any]].map { case (k, v) => k -> walk(v, anchor) }
-    case l: java.util.List[_] =>                            // ← add this case
+      m.asInstanceOf[Map[String, Any]]
+        .map { case (k, v) => k -> walk(v, anchor) }
+
+    case l: java.util.List[_] =>
       l.asScala.map(item => walk(item, anchor)).toList
+
     case l: List[_] =>
       l.map(item => walk(item, anchor))
+
     case s: String =>
       resolveValue(s, anchor)
+
     case other =>
       other
   }
 
   /**
-   * Walk the entire catalog config and resolve all {~~~...~~~} date templates.
-   *
-   * @param catalogConf  catalog map loaded from YAML
-   * @param startDate  anchor date string, e.g. "2024-01-15"
-   * @param dateFmt  format to parse startDate (default: yyyy-MM-dd)
-   * @return new map with all templates replaced by concrete date strings
+   * Resolve all date templates in catalog config
    */
   def resolveCatalogDates(
     catalogConf: Map[String, Any],
     startDate: String,
     dateFmt: String = "yyyy-MM-dd"
   ): Map[String, Any] = {
-    val anchor = LocalDate.parse(startDate, DateTimeFormatter.ofPattern(dateFmt))
-    walk(catalogConf, anchor).asInstanceOf[Map[String, Any]]
+
+    val anchor =
+      LocalDate.parse(startDate, DateTimeFormatter.ofPattern(dateFmt))
+
+    walk(catalogConf, anchor)
+      .asInstanceOf[Map[String, Any]]
   }
 }

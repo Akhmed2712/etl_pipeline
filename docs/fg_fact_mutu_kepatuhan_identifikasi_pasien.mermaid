@@ -1,0 +1,85 @@
+erDiagram
+
+  fg_fact_mutu_kepatuhan_identifikasi_pasien {
+    bigint id PK
+    bigint id_layanan_pendaftaran
+    bigint id_pasien
+    varchar nama
+    varchar nik
+    date tanggal_lahir
+    varchar tindakan
+    bigint id_penjualan
+    varchar id_operasi
+    bigint id_diagnosa
+    varchar status
+    smallint tahun
+    varchar triwulan
+    varchar nama_bulan
+    date partition_date
+  }
+
+  fg_fact_penjualan_barang {
+    bigint id PK
+    bigint id_layanan_pendaftaran
+    bigint id_pasien
+    bigint id_kemasan
+  }
+
+  dc_jadwal_kamar_operasi {
+    bigint id_layanan_pendaftaran
+    bigint id_pasien
+    varchar no_registrasi
+  }
+
+  dc_diagnosa {
+    bigint id PK
+    bigint id_layanan_pendaftaran
+  }
+
+  dc_layanan_pendaftaran {
+    bigint id PK
+    bigint id_pendaftaran
+    datetime waktu
+  }
+
+  dc_pendaftaran {
+    bigint id PK
+    bigint id_pasien
+  }
+
+  dc_pasien {
+    bigint id PK
+    varchar nama
+    varchar no_identitas
+    date tanggal_lahir
+  }
+
+  fg_dim_pengemasan_barang {
+    bigint id PK
+    varchar jenis_kategori
+  }
+
+  fg_dim_waktu {
+    date tanggal PK
+    smallint tahun
+    int triwulan
+    varchar nama_bulan
+  }
+
+  fg_fact_penjualan_barang }o--|| dc_layanan_pendaftaran : id_layanan_pendaftaran
+  fg_fact_penjualan_barang }o--|| dc_pasien : id_pasien
+  fg_fact_penjualan_barang }o--|| fg_dim_pengemasan_barang : id_kemasan
+
+  dc_jadwal_kamar_operasi }o--|| dc_layanan_pendaftaran : id_layanan_pendaftaran
+  dc_jadwal_kamar_operasi }o--|| dc_pasien : id_pasien
+
+  dc_diagnosa }o--|| dc_layanan_pendaftaran : id_layanan_pendaftaran
+  dc_layanan_pendaftaran }o--|| dc_pendaftaran : id_pendaftaran
+  dc_pendaftaran }o--|| dc_pasien : id_pasien
+
+  fg_fact_penjualan_barang }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : id_ke_id_penjualan
+  dc_jadwal_kamar_operasi }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : no_registrasi_ke_id_operasi
+  dc_diagnosa }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : id_ke_id_diagnosa
+  dc_layanan_pendaftaran }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : id_ke_id_layanan
+  dc_pasien }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : identitas_pasien
+  fg_dim_waktu }o--|| fg_fact_mutu_kepatuhan_identifikasi_pasien : atribut_waktu

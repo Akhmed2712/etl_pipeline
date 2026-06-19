@@ -4,7 +4,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.slf4j.LoggerFactory
 import org.apache.spark.sql.functions._
-import etl_pipeline.utils.{CredentialsLoader, DateResolver, YamlLoader}
+import etl_pipeline.utils.{CredentialsLoader, DateResolver, YamlLoader, SchemaValidator}
 import java.util.Properties
 import java.sql.{Connection, DriverManager, SQLException}
 
@@ -70,12 +70,22 @@ object Main {
 
     // ── Membangun DDL (Table & Primary Key) ──────────────────────────────────
     val colDefs = catalogCols.map { col =>
-      val name = col("column_name").toString
-      val colType = col("type").toString
-      val constraint = col.getOrElse("constraint", "").toString
-      val notNull = if (constraint.contains("not_null")) " NOT NULL" else ""
-      s"  `$name` $colType$notNull"
-    }.mkString(",\n")
+    val name = col("column_name").toString
+    val colType = col("type").toString
+    val constraint = col.getOrElse("constraint", "").toString
+    val notNull = if (constraint.contains("not_null")) " NOT NULL" else ""
+
+    val default = col.get("default") match {
+      case Some(null) | Some("null") =>
+        // timestamp butuh NULL sebelum DEFAULT NULL agar tidak ditolak strict mode MySQL
+        val nullability = if (colType.toLowerCase.startsWith("timestamp") && notNull.isEmpty) " NULL" else ""
+        s"$nullability DEFAULT NULL"
+      case Some(v) => s" DEFAULT '${v.toString}'"
+      case None    => ""
+    }
+
+    s"  `$name` $colType$notNull$default"
+  }.mkString(",\n")
 
     val pkCols = catalogCols
       .filter(_.getOrElse("constraint", "").toString.contains("primary_key"))
@@ -190,9 +200,30 @@ object Main {
     val readConf = catalogConf.getOrElse("read_conf", Map.empty).asInstanceOf[Map[String, Any]]
     val scriptLocation = catalogConf("script_location").toString.trim
     
-    val transformer = loadTransformer(scriptLocation)
-    val df = transformer.processData(spark, readConf, jdbcConfig)
-    writeToMySQL(spark, df, catalogConf, jdbcWriteConfig, startDate)
+    val transformer =
+  loadTransformer(scriptLocation)
+
+  val df =
+    transformer.processData(
+      spark,
+      readConf,
+      jdbcConfig
+    )
+
+  // ── VALIDATE SCHEMA ───────────────────────────────────────────────
+  SchemaValidator.validateWriteSchema(
+    df,
+    catalogConf
+  )
+
+  // ── WRITE TO MYSQL ────────────────────────────────────────────────
+  writeToMySQL(
+    spark,
+    df,
+    catalogConf,
+    jdbcWriteConfig,
+    startDate
+  )
   }
 
   // ── 5. Argument Parser ─────────────────────────────────────────────────────

@@ -1,0 +1,30 @@
+erDiagram
+
+  fg_fact_mutu_scp {
+    bigint id PK
+    varchar status
+  }
+
+  SCP_FILTER {
+    string no_daftar_terperinci
+  }
+
+  dc_jadwal_kamar_operasi {
+    bigint id_layanan_pendaftaran
+  }
+
+  dc_diagnosa {
+    bigint id_layanan_pendaftaran
+    bigint id_golongan_sebab_sakit
+  }
+
+  dc_golongan_sebab_sakit {
+    bigint id PK
+    varchar no_daftar_terperinci
+  }
+
+  dc_jadwal_kamar_operasi }o--|| SCP_FILTER : join
+  dc_diagnosa }o--|| SCP_FILTER : join
+  dc_golongan_sebab_sakit }o--|| SCP_FILTER : O82_1
+
+  SCP_FILTER }o--|| fg_fact_mutu_scp : generate_fact

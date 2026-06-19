@@ -1,0 +1,40 @@
+erDiagram
+  %% ─── TARGET DIM TABLE ────────────────────────────────────────────────────
+  fg_dim_nakes {
+    bigint  id           PK
+    varchar nama
+    varchar profesi
+    varchar spesialisasi
+  }
+  %% ─── SOURCE TABLES ───────────────────────────────────────────────────────
+  dc_nakes {
+    bigint id           PK
+    bigint id_pegawai   FK
+    bigint id_profesi   FK
+    bigint id_spesialis FK
+  }
+  dc_pegawai {
+    bigint  id    PK
+    varchar nama
+  }
+  dc_profesi_nakes {
+    bigint  id    PK
+    varchar nama
+  }
+  dc_spesialisasi {
+    bigint  id    PK
+    varchar nama
+  }
+  %% ─── SOURCE RELATIONSHIPS ────────────────────────────────────────────────
+  dc_nakes }o--|| dc_pegawai       : "id_pegawai = id"
+  dc_nakes }o--|| dc_profesi_nakes : "id_profesi = id"
+  dc_nakes }o--|| dc_spesialisasi  : "id_spesialis = id"
+  %% ─── ETL LINEAGE TO DIM TABLE ────────────────────────────────────────────
+  dc_nakes         }o--|| fg_dim_nakes : "id → id (PK)"
+  dc_pegawai       }o--|| fg_dim_nakes : "nama → nama"
+  dc_profesi_nakes }o--|| fg_dim_nakes : "nama → profesi"
+  dc_spesialisasi  }o--|| fg_dim_nakes : "nama → spesialisasi"
+  %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
+  %% All joins are LEFT — nakes rows without matching profesi/spesialisasi are kept
+  %% catalog key: dc_profesi → actual table dc_profesi_nakes
+  %% join column in dc_nakes is id_spesialis (not id_spesialisasi)

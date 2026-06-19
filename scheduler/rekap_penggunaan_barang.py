@@ -1,69 +1,95 @@
-from prefect import flow, task
+from prefect import flow, task, get_run_logger
 from datetime import datetime
 import subprocess
-import os
 
-@task(name="Execute Spark Script")
+@task(
+    name="Rekap Penggunaan Barang",
+    retries=3,
+    retry_delay_seconds=60,
+    persist_result=True
+)
 def execute_spark_job(jar, catalog, resource, start_date):
-    # Tentukan path ke script run_spark.sh Anda
-    script_path = "/opt/prefect/projects/run_spark.sh"
-    
-    # Perintah: ./run_spark.sh <jar> <catalog> <resource> <start_date>
-    cmd = [
-        "bash", script_path, 
-        jar, 
-        catalog, 
-        resource, 
-        start_date
-    ]
-    
-    print(f"Running job for resource: {resource} on date: {start_date}")
-    
-    # Jalankan subprocess
-    process = subprocess.run(
-        cmd, 
-        cwd="/opt/prefect/projects", # Pastikan run dari root project
-        capture_output=True, 
-        text=True
+    logger = get_run_logger()
+    script_path = "./run_spark.sh"
+    cmd = ["bash", script_path, jar, catalog, resource, start_date]
+    logger.info(f"Starting Spark job: {resource} | date: {start_date}")
+
+    process = subprocess.Popen(
+        cmd,
+        cwd="/opt/prefect/projects",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
     )
-    
+
+    for line in iter(process.stdout.readline, ""):
+        line = line.rstrip()
+        if line:
+            logger.info(line)
+
+    process.stdout.close()
+    process.wait()
+
     if process.returncode != 0:
-        print(f"Error Output: {process.stderr}")
-        raise Exception(f"Spark job {resource} failed with exit code {process.returncode}")
-    
-    print(f"Output: {process.stdout}")
+        raise Exception(
+            f"Spark job '{resource}' failed with exit code {process.returncode}"
+        )
+
+    logger.info(f"Spark job '{resource}' finished successfully")
     return True
 
+
 @flow(name="Rekap Penggunaan Barang")
-def rekap_penggunaan_barang_flow():
-    # Ambil tanggal hari ini format YYYY-MM-DD
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    # 1. Jalankan Dependensi Fact (Harian)
-    # fg_fact_penjualan_barang
-    f1 = execute_spark_job(
-        "etl_pipeline-assembly-1.0.0.jar", 
-        "fg_fact_penjualan_barang", 
-        "fg_fact_penjualan_barang", 
-        today
+def rekap_penggunaan_barang_flow(start_date: str = datetime.now().strftime("%Y-%m-%d")):
+    logger = get_run_logger()
+    logger.info(f"Starting flow for date: {start_date}")
+
+    # Stage 1: Dimension tables (paralel)
+    f1 = execute_spark_job.submit(
+        "etl-pipeline-assembly-1.0.0.jar",
+        "fg_dim_pengemasan_barang",
+        "fg_dim_pengemasan_barang",
+        start_date
     )
-    
-    # fg_fact_retur_barang
-    f2 = execute_spark_job(
-        "etl_pipeline-assembly-1.0.0.jar", 
-        "fg_fact_retur_barang", 
-        "fg_fact_retur_barang", 
-        today
-    )
-    
-    # 2. Jalankan Rekap Utama (Hanya jika Fact Penjualan & Retur Sukses)
-    execute_spark_job(
-        "etl_pipeline-assembly-1.0.0.jar", 
-        "rekap_penggunaan_barang", 
-        "rekap_penggunaan_barang", 
-        today,
-        wait_for=[f1, f2] # Menjamin urutan
+    f2 = execute_spark_job.submit(
+        "etl-pipeline-assembly-1.0.0.jar",
+        "fg_dim_nakes",
+        "fg_dim_nakes",
+        start_date
     )
 
+    # Stage 2: Fact tables (paralel, tunggu f1 & f2)
+    f3 = execute_spark_job.submit(
+        "etl-pipeline-assembly-1.0.0.jar",
+        "fg_fact_penjualan_barang",
+        "fg_fact_penjualan_barang",
+        start_date,
+        wait_for=[f1, f2]
+    )
+    f4 = execute_spark_job.submit(
+        "etl-pipeline-assembly-1.0.0.jar",
+        "fg_fact_retur_barang",
+        "fg_fact_retur_barang",
+        start_date,
+        wait_for=[f1, f2]
+    )
+
+    # Stage 3: Rekap final (tunggu semua)
+    f5 = execute_spark_job.submit(
+        "etl-pipeline-assembly-1.0.0.jar",
+        "fg_fact_rekap_penggunaan_barang",
+        "fg_fact_rekap_penggunaan_barang",
+        start_date,
+        wait_for=[f1, f2, f3, f4]
+    )
+
+    f5.result()
+    logger.info("Flow completed successfully")
+
+
 if __name__ == "__main__":
-    rekap_penggunaan_barang_flow()
+    rekap_penggunaan_barang_flow.serve(
+        name="rekap-penggunaan-barang",
+        cron="0 1 * * *",  # setiap hari jam 01:00
+    )

@@ -1,0 +1,57 @@
+erDiagram
+
+  fg_fact_mutu_rawat_jalan {
+    bigint id PK
+    timestamp waktu_daftar
+    timestamp waktu_konfirm_booking
+    timestamp waktu_periksa
+    bigint selisih_menit
+    varchar status
+    int tahun
+    varchar triwulan
+    varchar nama_bulan
+    date partition_date
+  }
+
+  dc_pendaftaran {
+    bigint id PK
+    timestamp waktu_daftar
+    timestamp waktu_konfirm_booking
+    varchar jenis
+    varchar status
+    varchar rawat
+  }
+
+  dc_layanan_pendaftaran {
+    bigint id PK
+    bigint id_pendaftaran
+    bigint id_unit_layanan
+    timestamp waktu
+    varchar status
+  }
+
+  dc_tarif_tindakan {
+    bigint id PK
+    bigint id_layanan_pendaftaran
+    timestamp waktu
+    varchar jenis
+  }
+
+  dc_spesialisasi {
+    bigint id PK
+    varchar nama
+  }
+
+  dc_pendaftaran ||--o{ dc_layanan_pendaftaran : id_pendaftaran
+
+  dc_layanan_pendaftaran ||--o{ dc_tarif_tindakan : id_layanan_pendaftaran
+
+  dc_layanan_pendaftaran }o--|| dc_spesialisasi : id_unit_layanan
+
+  dc_pendaftaran }o--|| fg_fact_mutu_rawat_jalan : waktu_daftar
+
+  dc_layanan_pendaftaran }o--|| fg_fact_mutu_rawat_jalan : urutan_layanan
+
+  dc_tarif_tindakan }o--|| fg_fact_mutu_rawat_jalan : waktu_periksa
+
+  dc_spesialisasi }o--|| fg_fact_mutu_rawat_jalan : eksklusi_gigi

@@ -1,75 +1,88 @@
 erDiagram
-
   %% ─── TARGET FACT TABLE ───────────────────────────────────────────────────
-
   fg_fact_penjualan_barang {
-    bigint    id                      PK
+    bigint    id                     PK
     timestamp waktu
     bigint    id_layanan_pendaftaran
+    bigint    id_pasien
+    bigint    id_dokter
     varchar   jenis_layanan
     int       id_unit_layanan
     varchar   cara_bayar
     bigint    id_penjamin
     bigint    id_kemasan
     bigint    id_barang_paket
+    varchar   nobatch
+    varchar   id_unit
     decimal   jumlah
-    decimal   harga_jual
+    decimal   hna
     decimal   hpp
+    decimal   harga_jual
     date      partition_date
   }
-
   %% ─── SOURCE TABLES ───────────────────────────────────────────────────────
-
   dc_penjualan {
-    bigint    id                      PK
+    bigint    id                     PK
     timestamp waktu
     bigint    id_layanan_pendaftaran
-    varchar   jenis
+    bigint    id_pasien
+    bigint    id_dokter
+    bigint    id_penjamin
   }
-
   dc_detail_penjualan {
-    bigint    id                      PK
-    bigint    id_penjualan            FK
+    bigint    id              PK
+    bigint    id_penjualan    FK
     bigint    id_kemasan
     bigint    id_barang_paket
     decimal   qty
+    decimal   hna
     decimal   harga_jual
     decimal   hpp
-  }
-
-  dc_layanan_pendaftaran {
-    bigint    id                      PK
     timestamp waktu
+  }
+  dc_layanan_pendaftaran {
+    bigint    id             PK
     bigint    id_penjamin
     int       id_unit_layanan
     varchar   jenis
     varchar   cara_bayar
   }
-
-  fg_dim_penjamin {
-    bigint    id                      PK
-    varchar   nama
+  dc_penjamin {
+    bigint    id    PK
     varchar   jenis
   }
-
+  dc_stok {
+    bigint    id            PK
+    bigint    id_penjualan
+    bigint    id_barang
+    varchar   nobatch
+    varchar   id_unit
+    timestamp waktu
+  }
+  fg_dim_pengemasan_barang {
+    bigint    id         PK
+    bigint    id_barang
+  }
   %% ─── SOURCE RELATIONSHIPS ────────────────────────────────────────────────
-
-  dc_penjualan ||--o{ dc_detail_penjualan     : "id = id_penjualan"
-  dc_penjualan }o--|| dc_layanan_pendaftaran  : "id_layanan_pendaftaran = id"
-  dc_layanan_pendaftaran }o--|| fg_dim_penjamin : "id_penjamin = id"
-
+  dc_penjualan ||--o{ dc_detail_penjualan    : "id = id_penjualan (INNER)"
+  dc_penjualan }o--|| dc_layanan_pendaftaran : "id_layanan_pendaftaran = id (LEFT)"
+  dc_layanan_pendaftaran }o--|| dc_penjamin  : "id_penjamin = id (LEFT)"
   %% ─── ETL LINEAGE TO FACT TABLE ───────────────────────────────────────────
-
-  dc_penjualan }o--|| fg_fact_penjualan_barang : "waktu, id_layanan_pendaftaran"
-  dc_detail_penjualan }o--|| fg_fact_penjualan_barang : "id_kemasan, qty → jumlah, harga_jual, hpp"
-  dc_layanan_pendaftaran }o--|| fg_fact_penjualan_barang : "jenis → jenis_layanan, id_unit_layanan, cara_bayar"
-  fg_dim_penjamin }o--|| fg_fact_penjualan_barang : "fallback jenis → cara_bayar"
-
+  dc_detail_penjualan    }o--|| fg_fact_penjualan_barang : "id(PK), id_kemasan, id_barang_paket, qty → jumlah, hna, hpp, harga_jual, waktu → partition_date"
+  dc_penjualan           }o--|| fg_fact_penjualan_barang : "id_layanan_pendaftaran, id_pasien, id_dokter"
+  dc_layanan_pendaftaran }o--|| fg_fact_penjualan_barang : "jenis → jenis_layanan, id_unit_layanan, cara_bayar, id_penjamin"
+  dc_penjamin            }o--|| fg_fact_penjualan_barang : "jenis → cara_bayar (fallback when cara_bayar blank)"
+  dc_stok                }o--|| fg_fact_penjualan_barang : "nobatch, id_unit (latest row per id_penjualan+id_barang)"
+  fg_dim_pengemasan_barang }o--|| fg_fact_penjualan_barang : "id_kemasan = id — resolves id_barang for stok join"
   %% ─── TRANSFORMATION NOTES ────────────────────────────────────────────────
-
-  %% qty                  → jumlah
-  %% jenis                → jenis_layanan
-  %% substring(waktu,1,10) → partition_date
-  %% cara_bayar fallback:
-  %%   if dc_layanan_pendaftaran.cara_bayar is null/blank
-  %%   then use fg_dim_penjamin.jenis
+  %% Source grain       = dc_detail_penjualan
+  %% filter             = substring(waktu,1,10) < current_month_start (both dc_penjualan and dc_detail_penjualan)
+  %% qty                → jumlah
+  %% jenis              → jenis_layanan
+  %% partition_date     = substring(dc_detail_penjualan.waktu, 1, 10)
+  %% cara_bayar logic   = WHEN LOWER(cara_bayar) IS NOT NULL AND TRIM(cara_bayar) != ''
+  %%                      THEN dc_layanan_pendaftaran.cara_bayar
+  %%                      ELSE dc_penjamin.jenis
+  %% dc_stok join       = LEFT JOIN on (id_penjualan, id_barang) with
+  %%                      ROW_NUMBER() OVER (PARTITION BY id_penjualan, id_barang ORDER BY id DESC) = 1
+  %% nobatch            = WHEN TRIM(COALESCE(nobatch,''))='' THEN 'nobatch kosong' ELSE nobatch
