@@ -1,0 +1,81 @@
+# ──────────────────────────────────────────────────────────────────
+# Base Spark config anchor - Optimized for Jakarta Timezone
+# ──────────────────────────────────────────────────────────────────
+_base_conf: &base_conf
+  spark.sql.session.timeZone: Asia/Jakarta
+  spark.driver.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+  spark.executor.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
+  spark.sql.ansi.enabled: false
+  spark.sql.legacy.timeParserPolicy: LEGACY
+  spark.memory.fraction: 0.8
+  spark.memory.storageFraction: 0.2
+  spark.driver.maxResultSize: 2g
+
+low: &low
+  <<: *base_conf
+  spark.executor.cores: 1
+  spark.executor.memory: 1g
+  spark.executor.instances: 1
+
+medium: &medium
+  <<: *base_conf
+  spark.executor.cores: 2
+  spark.executor.memory: 2g
+  spark.executor.instances: 2
+
+high_local: &high_local
+  <<: *base_conf
+  spark.executor.cores: 4
+  spark.executor.memory: 4g 
+  spark.driver.memory: 2g
+  spark.executor.instances: 2 
+
+fg_fact_mutu_rawat_jalan:
+  <<: *low
+  spark.app.name: fg_fact_mutu_rawat_jalan
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_pengemasan_barang:
+  <<: *low
+  spark.app.name: fg_dim_pengemasan_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_agg_mutu_fornas:
+  <<: *high_local
+  spark.app.name: fg_agg_mutu_fornas
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_kepatuhan_identifikasi_pasien:
+  <<: *low
+  spark.app.name: fg_fact_mutu_kepatuhan_identifikasi_pasien
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_scp:
+  <<: *low
+  spark.app.name: fg_fact_mutu_scp
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_visite_dokter:
+  <<: *low
+  spark.app.name: fg_fact_mutu_visite_dokter
+  spark.sql.shuffle.partitions: 10
+
+fg_staging_document_history_list:
+  <<: *low
+  spark.app.name: fg_staging_document_history_list
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_hasil_lab_kritis:
+  <<: *low
+  spark.app.name: fg_fact_mutu_hasil_lab_kritis
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_pasien_jatuh:
+  <<: *low
+  spark.app.name: fg_fact_mutu_pasien_jatuh
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_identifikasi_pasien:
+  <<: *low
+  spark.app.name: fg_fact_mutu_identifikasi_pasien
+  spark.sql.shuffle.partitions: 10

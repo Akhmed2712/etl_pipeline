@@ -35,6 +35,7 @@ object FgFactMutuHasilLabKritis extends Transformer {
         s"${dcLaboratorium("database")}.${dcLaboratorium("table")}",
         props
       )
+      .filter(dcLaboratorium("filter").toString)
       .select(
         col("id"),
         col("doc_his_id"),
@@ -51,6 +52,7 @@ object FgFactMutuHasilLabKritis extends Transformer {
         s"${documentHistoryList("database")}.${documentHistoryList("table")}",
         props
       )
+      .filter(documentHistoryList("filter").toString)
       .select(
         col("id").as("staging_id"),
         col("created_time"),

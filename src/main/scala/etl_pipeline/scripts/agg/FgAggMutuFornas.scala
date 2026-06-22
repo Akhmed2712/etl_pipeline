@@ -24,7 +24,6 @@ object FgAggMutuFornas extends Transformer {
     val dcLayananPendaftaran = env("dc_layanan_pendaftaran").asInstanceOf[Map[String, Any]]
     val dcPendaftaran = env("dc_pendaftaran").asInstanceOf[Map[String, Any]]
     val dcSpesialisasi = env("dc_spesialisasi").asInstanceOf[Map[String, Any]]
-    val fgDimWaktu = env("fg_dim_waktu").asInstanceOf[Map[String, Any]]
 
     val props = new java.util.Properties()
     jdbcConfig.props.foreach { case (k, v) =>
@@ -94,14 +93,6 @@ object FgAggMutuFornas extends Transformer {
         s"${dcSpesialisasi("database")}.${dcSpesialisasi("table")}",
         props
       )
-
-    val dfWaktu = spark.read
-      .jdbc(
-        jdbcConfig.url,
-        s"${fgDimWaktu("database")}.${fgDimWaktu("table")}",
-        props
-      )
-      .dropDuplicates("tanggal")
 
     // =====================================================
     // JOIN
@@ -269,19 +260,25 @@ object FgAggMutuFornas extends Transformer {
       )
 
     // =====================================================
-    // JOIN DIM WAKTU
+    // GENERATE DIMENSI WAKTU (Substitusi dfWaktu Join)
     // =====================================================
-
     val dfWithTime = dfAgg
-      .join(
-        dfWaktu,
-        to_date(col("waktu")) === col("tanggal"),
-        "left"
-      )
-      .drop(dfWaktu("id"))
+      .withColumn("tahun", year(col("waktu")))
+      .withColumn("triwulan", concat(lit("Q"), quarter(col("waktu"))))
       .withColumn(
-        "triwulan",
-        concat(lit("Q"), col("triwulan"))
+        "nama_bulan",
+        when(month(col("waktu")) === 1, "01-Januari")
+          .when(month(col("waktu")) === 2, "02-Februari")
+          .when(month(col("waktu")) === 3, "03-Maret")
+          .when(month(col("waktu")) === 4, "04-April")
+          .when(month(col("waktu")) === 5, "05-Mei")
+          .when(month(col("waktu")) === 6, "06-Juni")
+          .when(month(col("waktu")) === 7, "07-Juli")
+          .when(month(col("waktu")) === 8, "08-Agustus")
+          .when(month(col("waktu")) === 9, "09-September")
+          .when(month(col("waktu")) === 10, "10-Oktober")
+          .when(month(col("waktu")) === 11, "11-November")
+          .otherwise("12-Desember")
       )
 
     // =====================================================

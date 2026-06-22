@@ -7,10 +7,7 @@ _base_conf: &base_conf
   spark.executor.extraJavaOptions: "-Duser.timezone=Asia/Jakarta"
   spark.sql.ansi.enabled: false
   spark.sql.legacy.timeParserPolicy: LEGACY
-<<<<<<< HEAD
-=======
   # Optimasi Memori Global
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
   spark.memory.fraction: 0.8
   spark.memory.storageFraction: 0.2
   spark.driver.maxResultSize: 2g
@@ -59,19 +56,10 @@ fg_dim_pengemasan_barang:
 fg_fact_penjualan_barang:
   <<: *high_local
   spark.app.name: fg_fact_penjualan_barang
-<<<<<<< HEAD
-  spark.sql.shuffle.partitions: 50
-  spark.executor.cores: 1         
-  spark.executor.memory: 4g       
-  spark.executor.instances: 1      
-  spark.sql.shuffle.partitions: 100
-=======
-  spark.sql.shuffle.partitions: 20
-  spark.executor.cores: 2         
-  spark.executor.memory: 8g       
-  spark.executor.instances: 1      
-  spark.sql.shuffle.partitions: 200 
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+  spark.executor.cores: 2         # Gunakan maksimal 2 core agar tidak banyak task antri memori
+  spark.executor.memory: 3g       # Alokasi heap yang cukup tapi tidak berlebihan
+  spark.executor.instances: 2      # WAJIB 1 untuk debugging di lokal
+  spark.sql.shuffle.partitions: 40 # JANGAN 4 JUTA. Gunakan 200 untuk data menengah.
   spark.memory.fraction: 0.7
 
 fg_fact_retur_barang:
@@ -94,14 +82,13 @@ fg_fact_rekap_penggunaan_barang:
   spark.app.name: fg_fact_rekap_penggunaan_barang
   spark.executor.cores: 2         # Gunakan maksimal 2 core agar tidak banyak task antri memori
   spark.executor.memory: 4g       # Alokasi heap yang cukup tapi tidak berlebihan
-  spark.executor.instances: 1      # WAJIB 1 untuk debugging di lokal
-  spark.sql.shuffle.partitions: 200 # JANGAN 4 JUTA. Gunakan 200 untuk data menengah.
+  spark.executor.instances: 2      # WAJIB 1 untuk debugging di lokal
+  spark.sql.shuffle.partitions: 100 # JANGAN 4 JUTA. Gunakan 200 untuk data menengah.
   spark.memory.fraction: 0.7
   
 fg_dim_waktu:
   <<: *low
   spark.app.name: fg_dim_waktu
-<<<<<<< HEAD
   spark.sql.shuffle.partitions: 10
 
 fg_dim_nakes:
@@ -152,6 +139,39 @@ fg_fact_mutu_rawat_jalan:
 fg_agg_mutu_fornas:
   <<: *low
   spark.app.name: fg_agg_mutu_fornas
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_kepatuhan_identifikasi_pasien:
+  <<: *low
+  spark.app.name: fg_fact_mutu_kepatuhan_identifikasi_pasien
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_scp:
+  <<: *low
+  spark.app.name: fg_fact_mutu_scp
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_visite_dokter:
+  <<: *low
+  spark.app.name: fg_fact_mutu_visite_dokter
+  spark.sql.shuffle.partitions: 10
+
+fg_staging_document_history_list:
+  <<: *low
+  spark.app.name: fg_staging_document_history_list
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_hasil_lab_kritis:
+  <<: *low
+  spark.app.name: fg_fact_mutu_hasil_lab_kritis
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_pasien_jatuh:
+  <<: *low
+  spark.app.name: fg_fact_mutu_pasien_jatuh
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_mutu_identifikasi_pasien:
+  <<: *low
+  spark.app.name: fg_fact_mutu_identifikasi_pasien
   spark.sql.shuffle.partitions: 10

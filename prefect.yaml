@@ -1,38 +1,49 @@
----
-# Welcome to your prefect.yaml file! You can use this file for
-# storing and managing configuration for deploying your flows.
-# We recommend committing this file to source control along
-# with your flow code.
-
-# Generic metadata about this project
-name: projects
-prefect-version: 3.6.28
-
-# build section allows you to manage and build docker images
-build: null
-
-# push section allows you to manage if and how this project
-# is uploaded to remote locations
-push: null
-
-# pull section allows you to provide instructions for cloning
-# this project in remote locations
-pull:
-- prefect.deployments.steps.set_working_directory:
-    directory: /opt/prefect/projects
-
-# the deployments section allows you to provide configuration
-# for deploying flows
 deployments:
-- name: rekap-harian
-  version: null
-  tags: []
-  concurrency_limit: null
-  description: null
-  entrypoint: /opt/prefect/projects/scheduler/rekap_penggunaan_barang.py:rekap_penggunaan_barang_flow
-  parameters: {}
-  work_pool:
-    name: default-agent-pool
-    work_queue_name: null
-    job_variables: {}
-  schedules: []
+  - name: kepatuhan-identifikasi-pasien
+    entrypoint: scheduler/1. kepatuhan_identifikasi_pasien.py:kepatuhan_identifikasi_pasien_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: waktu-tanggap-operasi-seksio-sesarea-emergensi
+    entrypoint: scheduler/2. waktu_tanggap_operasi_seksio_sesarea_emergensi.py:waktu_tanggap_operasi_seksio_sesarea_emergensi_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: waktu-tunggu-rawat-jalan
+    entrypoint: scheduler/3. waktu_tunggu_rawat_jalan.py:waktu_tunggu_rawat_jalan_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: kepatuhan-waktu-visite-dokter
+    entrypoint: scheduler/5. kepatuhan_waktu_visite_dokter.py:kepatuhan_waktu_visite_dokter_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: pelaporan-hasil-kritis-laboratorium
+    entrypoint: scheduler/6. pelaporan_hasil_kritis_laboratorium.py:pelaporan_hasil_kritis_laboratorium_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: kepatuhan-penggunaan-fornas
+    entrypoint: scheduler/7. kepatuhan_penggunaan_fornas.py:kepatuhan_penggunaan_fornas_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"
+
+  - name: kepatuhan-upaya-pencegahan-risiko-pasien
+    entrypoint: scheduler/9. kepatuhan_upaya_pencegahan_risiko_pasien_jatuh.py:kepatuhan_upaya_pencegahan_risiko_pasien_jatuh_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"

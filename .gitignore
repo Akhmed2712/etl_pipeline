@@ -1,10 +1,13 @@
 credentials/credentials.yml
 logs/
-target/
+target/*
+!target/scala-2.13/
+!target/scala-2.13/*.jar
 .bsp/
 .idea/
 *.class
 *.log
+docs/
 .metals/
 .vscode/
 dbt*
