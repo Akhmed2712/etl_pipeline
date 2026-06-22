@@ -2,11 +2,7 @@ _mysql_conf_uat: &mysql_conf_uat
   layer: mysql
   env: dev
   credentials_key: mysqldev    # matches key in credentials/credentials.yml
-<<<<<<< HEAD
-  database: stga
-=======
   database: simrs_astrini_bai
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
 
 _mysql_conf_local: &mysql_conf_local
   layer: mysql
@@ -14,84 +10,54 @@ _mysql_conf_local: &mysql_conf_local
   credentials_key: mysqllocal    # matches key in credentials/credentials.yml
   database: farmagitechs     # used to build jdbc_url: jdbc:mysql://host:port/<database>
 
-_mysql_conf_local_olap: &mysql_conf_local_olap
+mysql_conf_uat_ii: &mysql_conf_uat_ii
   layer: mysql
   env: dev
-  credentials_key: mysqllocalolap    # matches key in credentials/credentials.yml
-  database: olap 
+  credentials_key: mysqldev_2    # matches key in credentials/credentials.yml
+  database: simrs_ums 
+
+postgres_conf_uat: &postgres_conf_uat
+  layer: postgres
+  env: dev
+  credentials_key: postgresuat    # matches key in credentials/credentials.yml
+  database: e_doc_ums 
 
 fg_dim_pengemasan_barang:
-<<<<<<< HEAD
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_dim_pengemasan_barang
-  schema: stga
-  #write_credentials_key: mysqllocalolap
-  #write_database: olap
-=======
-  <<: *mysql_conf_uat
-  table: fg_dim_pengemasan_barang
-  schema: stga
-  write_credentials_key: mysqllocalolap
-  write_database: olap
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+  schema: simrs_ums_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fg_dim_pengemasan_barang.FgDimPengemasanBarang
+  script_location: etl_pipeline.scripts.dimension.FgDimPengemasanBarang
 
   read_conf:
     dc_barang:
-<<<<<<< HEAD
-      database: stga
+      database: simrs_ums
       table: dc_barang
 
     dc_kemasan_barang:
-      database: stga
+      database: simrs_ums
       table: dc_kemasan_barang
 
     dc_sediaan:
-      database: stga
+      database: simrs_ums
       table: dc_sediaan
 
     dc_golongan:
-      database: stga
+      database: simrs_ums
       table: dc_golongan
 
     dc_kategori_barang:
-      database: stga
+      database: simrs_ums
       table: dc_kategori_barang
 
     dc_barang_paket:
-      database: stga
+      database: simrs_ums
       table: dc_barang_paket
 
     dc_satuan:
-      database: stga
+      database: simrs_ums
       table: dc_satuan
 
-=======
-      database: simrs_astrini_bai
-      table: dc_barang
-
-    dc_kemasan_barang:
-      database: simrs_astrini_bai
-      table: dc_kemasan_barang
-
-    dc_sediaan:
-      database: simrs_astrini_bai
-      table: dc_sediaan
-
-    dc_golongan:
-      database: simrs_astrini_bai
-      table: dc_golongan
-
-    dc_kategori_barang:
-      database: simrs_astrini_bai
-      table: dc_kategori_barang
-
-    dc_barang_paket:
-      database: simrs_astrini_bai
-      table: dc_barang_paket
-
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
   write_conf:
     mode: overwrite
     schema:
@@ -100,11 +66,8 @@ fg_dim_pengemasan_barang:
         constraint: primary_key,not_null
       - column_name: id_barang_paket
         type: bigint
-<<<<<<< HEAD
       - column_name: id_barang
         type: bigint
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       - column_name: nama_barang
         type: varchar(500)
       - column_name: sediaan
@@ -115,19 +78,20 @@ fg_dim_pengemasan_barang:
         type: varchar(50)
       - column_name: formularium
         type: varchar(5)
+      - column_name: fornas
+        type: varchar(5)
       - column_name: kategori
         type: varchar(50)
-<<<<<<< HEAD
       - column_name: jenis_kategori
         type: varchar(50)
       - column_name: satuan
         type: varchar(50)
       - column_name: hna
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: hpp
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: harga_jual
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: margin_non_resep
         type: decimal(10,2)
       - column_name: margin_resep
@@ -136,7 +100,6 @@ fg_dim_pengemasan_barang:
         type: decimal(10,2)
       - column_name: plus_ppn
         type: decimal(10,2)
-=======
     options:
       batchsize: 1000
       numPartitions: 5
@@ -167,16 +130,15 @@ fg_dim_penjamin:
         type: varchar(5)
       - column_name: status_aktif
         type: int
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
     options:
       batchsize: 1000
       numPartitions: 5
 
 fg_dim_waktu:
-  <<: *mysql_conf_local_olap
-  schema: stga
+  <<: *mysql_conf_uat_ii
+  schema: simrs_ums_mart
   table: fg_dim_waktu
-  script_location: etl_pipeline.scripts.fg_dim_waktu.FgDimWaktu
+  script_location: etl_pipeline.scripts.dimension.FgDimWaktu
   read_conf:
     start_year: 2020
     end_year: 2030
@@ -209,85 +171,59 @@ fg_dim_waktu:
         type: boolean
 
 fg_fact_penjualan_barang:
-<<<<<<< HEAD
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_fact_penjualan_barang
-  schema: stga
-=======
-  <<: *mysql_conf_uat
-  table: fg_fact_penjualan_barang
-  schema: simrs_dw_stga
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+  schema: simrs_ums_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fg_fact_penjualan_barang.FgFactPenjualanBarang
+  script_location: etl_pipeline.scripts.fact.FgFactPenjualanBarang
   partitionColumn: "id"
   lowerBound: "1"
-<<<<<<< HEAD
-  upperBound: "10000000"
-  numPartitions: 50
+  upperBound: "3100000"
+  numPartitions: 40
 
   read_conf:
     dc_penjualan:
-      database: stga
+      database: simrs_ums
       table: dc_penjualan
-      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_detail_penjualan:
-      database: stga
+      database: simrs_ums
       table: dc_detail_penjualan
-      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_resep:
-      database: stga
+      database: simrs_ums
       table: dc_resep
-      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
-
-    dc_layanan_pendaftaran:
-      database: stga
-      table: dc_layanan_pendaftaran
-      filter: "substring(waktu, 1,10) between '{~~~%Y-%m-%d:day=10~~~}' and '{~~~%Y-%m-%d:day=0~~~}'"
-
-    dc_pendaftaran:
-      database: stga
-      table: dc_pendaftaran
-      filter: "substring(waktu_daftar, 1, 10) = '{~~~%Y-%m-%d:day=1~~~}'"
-
-    dc_penjamin:
-      database: stga
-      table: dc_penjamin
-
-    fg_dim_pengemasan_barang:
-      database: stga
-      table: fg_dim_pengemasan_barang
-
-    dc_stok:
-      database: stga
-      table: dc_stok
-      filter: "substring(waktu, 1,10) = '{~~~%Y-%m-%d:day=1~~~}' and lower(transaksi) = 'penjualan'"
-=======
-  upperBound: "1000000"
-  numPartitions: 20
-
-  read_conf:
-    dc_penjualan:
-      database: simrs_astrini_bai
-      table: dc_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
-    dc_detail_penjualan:
-      database: simrs_astrini_bai
-      table: dc_detail_penjualan
+    dc_resep_bebas:
+      database: simrs_ums
+      table: dc_resep_bebas
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_layanan_pendaftaran:
-      database: simrs_astrini_bai
+      database: simrs_ums
       table: dc_layanan_pendaftaran
       filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
 
-    fg_dim_penjamin:
-      database: simrs_astrini_bai
-      table: fg_dim_penjamin
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+    dc_pendaftaran:
+      database: simrs_ums
+      table: dc_pendaftaran
+      filter: "substring(waktu_daftar, 1, 10) < '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_penjamin:
+      database: simrs_ums
+      table: dc_penjamin
+
+    fg_dim_pengemasan_barang:
+      database: simrs_ums_mart
+      table: fg_dim_pengemasan_barang
+
+    dc_stok:
+      database: simrs_ums
+      table: dc_stok
+      filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
 
   write_conf:
     mode: overwrite
@@ -299,13 +235,12 @@ fg_fact_penjualan_barang:
         type: timestamp 
       - column_name: id_layanan_pendaftaran
         type: bigint 
-<<<<<<< HEAD
       - column_name: id_pasien
         type: bigint 
       - column_name: id_dokter
         type: bigint
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+      - column_name: id_penjualan
+        type: bigint
       - column_name: jenis_layanan
         type: varchar(50) 
       - column_name: id_unit_layanan
@@ -317,7 +252,6 @@ fg_fact_penjualan_barang:
       - column_name: id_kemasan
         type: bigint
       - column_name: id_barang_paket
-<<<<<<< HEAD
         type: bigint
       - column_name: id_resep
         type: bigint
@@ -335,63 +269,33 @@ fg_fact_penjualan_barang:
         type: decimal(10,2)
       - column_name: harga_jual
         type: decimal(10,2)
-=======
-        type: bigint  
-      - column_name: jumlah
-        type: decimal(10,2)
-      - column_name: harga_jual
-        type: decimal(10,2)
-      - column_name: hpp
-        type: decimal(10,2)
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       - column_name: partition_date
         type: date
         index: true  
     options:
       batchsize: 1000
-<<<<<<< HEAD
-      numPartitions: 30
-
-fg_fact_retur_barang:
-  <<: *mysql_conf_local_olap
-  table: fg_fact_retur_barang
-  schema: stga
-=======
       numPartitions: 5
 
 fg_fact_retur_barang:
   <<: *mysql_conf_uat
   table: fg_fact_retur_barang
   schema: simrs_dw_stga
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
   script_type: scala
   script_location: etl_pipeline.scripts.fg_fact_retur_barang.FgFactReturBarang
 
   read_conf:
     dc_retur_penjualan:
-<<<<<<< HEAD
-      database: stga
-=======
       database: simrs_astrini_bai
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       table: dc_retur_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_detur_penjualan:
-<<<<<<< HEAD
-      database: stga
-=======
       database: simrs_astrini_bai
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       table: dc_detur_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_layanan_pendaftaran:
-<<<<<<< HEAD
-      database: stga
-=======
       database: simrs_astrini_bai
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       table: dc_layanan_pendaftaran
       filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
 
@@ -403,10 +307,13 @@ fg_fact_retur_barang:
         constraint: primary_key,not_null
       - column_name: waktu
         type: timestamp
+        index: true  
       - column_name: id_layanan_pendaftaran
         type: bigint
+        index: true  
       - column_name: id_kemasan
         type: bigint
+        index: true  
       - column_name: jumlah
         type: decimal(10,2)
       - column_name: partition_date
@@ -416,14 +323,10 @@ fg_fact_retur_barang:
       batchsize: 1000
       numPartitions: 5
 
-<<<<<<< HEAD
-=======
 fg_dim_layanan:
   <<: *mysql_conf_uat
   table: fg_dim_layanan
-  schema: stga
-  write_credentials_key: mysqllocalolap
-  write_database: olap
+  schema: simrs_dw_stga
   script_type: scala
   script_location: etl_pipeline.scripts.fg_dim_layanan.FgDimLayanan
 
@@ -445,65 +348,47 @@ fg_dim_layanan:
       batchsize: 1000
       numPartitions: 5
 
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
 fg_fact_rekap_penggunaan_barang:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat
   table: fg_fact_rekap_penggunaan_barang
-  schema: stga
+  schema: simrs_dw_stga
   script_type: scala
-<<<<<<< HEAD
   script_location: etl_pipeline.scripts.fg_fact_rekap_penggunaan_barang.FgFactRekapPenggunaanBarang
-=======
-  script_location: etl_pipeline.scripts.fg_fact_rekap_penggunaan_barang.FgFactRekapPenggunaan
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+  partitionColumn: "id"
+  lowerBound: "1"
+  upperBound: "10000000"
+  numPartitions: 50
 
   read_conf:
     fg_fact_penjualan_barang:
-      database: stga
+      database: simrs_dw_stga
       table: fg_fact_penjualan_barang
-<<<<<<< HEAD
-      filter: "partition_date = '{~~~%Y-%m-%d:day=1~~~}'"
-=======
-      filter: "partition_date < '{~~~%Y-%m-%d:day=1~~~}'"
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
+      filter: "partition_date = '{~~~%Y-%m-%d:day=0~~~}'"
 
     fg_fact_retur_barang:
-      database: stga
+      database: simrs_dw_stga
       table: fg_fact_retur_barang
 
     fg_dim_pengemasan_barang:
-      database: stga
+      database: simrs_dw_stga
       table: fg_dim_pengemasan_barang
 
-<<<<<<< HEAD
     dc_penjamin:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_penjamin
 
     dc_spesialisasi:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_spesialisasi
-=======
-    fg_dim_penjamin:
-      database: stga
-      table: fg_dim_penjamin
-
-    fg_dim_layanan:
-      database: stga
-      table: fg_dim_layanan
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
 
     fg_dim_waktu:
-      database: stga
+      database: simrs_dw_stga
       table: fg_dim_waktu
 
-<<<<<<< HEAD
     fg_dim_nakes:
-      database: stga
+      database: simrs_dw_stga
       table: fg_dim_nakes
 
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
   write_conf:
     mode: overwrite
     schema:
@@ -516,7 +401,6 @@ fg_fact_rekap_penggunaan_barang:
         type: varchar(50)  
       - column_name: nama_barang
         type: varchar(1000)
-<<<<<<< HEAD
       - column_name: nobatch
         type: varchar(50)
         index: true
@@ -524,8 +408,6 @@ fg_fact_rekap_penggunaan_barang:
         type: varchar(100)
       - column_name: spesialisasi
         type: varchar(100)
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       - column_name: jenis_layanan
         type: varchar(50)
       - column_name: klinik
@@ -540,21 +422,14 @@ fg_fact_rekap_penggunaan_barang:
         type: decimal(10,2)
       - column_name: jumlah_pakai
         type: decimal(10,2)
-<<<<<<< HEAD
       - column_name: hna
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: hpp
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: harga_jual
-        type: decimal(16,2)
+        type: decimal(10,2)
       - column_name: subtotal_hna
         type: decimal(16,2)
-=======
-      - column_name: hpp
-        type: decimal(10,2)
-      - column_name: harga_jual
-        type: decimal(10,2)
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       - column_name: subtotal_hpp
         type: decimal(16,2)
       - column_name: subtotal_harga_jual
@@ -563,12 +438,9 @@ fg_fact_rekap_penggunaan_barang:
         type: smallint
       - column_name: triwulan
         type: varchar(5)
-<<<<<<< HEAD
       - column_name: nama_bulan
         type: varchar(20)
         index: true
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
       - column_name: partition_date
         type: date
         index: true
@@ -578,10 +450,7 @@ fg_fact_rekap_penggunaan_barang:
         columns: [
           "tahun",
           "triwulan",
-<<<<<<< HEAD
           "nama_bulan",
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
           "jenis_layanan",
           "cara_bayar",
           "penjamin",
@@ -592,45 +461,37 @@ fg_fact_rekap_penggunaan_barang:
           "jumlah",
           "jumlah_retur",
           "jumlah_pakai",
-<<<<<<< HEAD
           "subtotal_hna",
           "subtotal_hpp",
           "subtotal_harga_jual"
-=======
-          "subtotal_harga_jual",
-          "subtotal_hpp"
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
         ]
 
     options:
       batchsize: 1000
-<<<<<<< HEAD
       numPartitions: 20
 
 fg_dim_nakes:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat
   table: fg_dim_nakes
-  schema: stga
-  #write_credentials_key: mysqllocalolap
-  #write_database: olap
+  schema: simrs_dw_stga
   script_type: scala
   script_location: etl_pipeline.scripts.fg_dim_nakes.FgDimNakes
 
   read_conf:
     dc_nakes:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_nakes
 
     dc_pegawai:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_pegawai
 
     dc_profesi:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_profesi_nakes
 
     dc_spesialisasi:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_spesialisasi
 
   write_conf:
@@ -649,10 +510,11 @@ fg_dim_nakes:
       batchsize: 1000
       numPartitions: 5
 
+
 fg_staging_komponen_tarif_kelas:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_staging_komponen_tarif_kelas
-  schema: stga
+  schema: simrs_rsudinda_mart
   #write_credentials_key: mysqllocalolap
   #write_database: olap
   script_type: scala
@@ -660,11 +522,11 @@ fg_staging_komponen_tarif_kelas:
 
   read_conf:
     dc_kelas_komponen_tarif:
-      database: stga
+      database: simrs_rsudinda
       table: dc_kelas_komponen_tarif
 
     dc_kelas:
-      database: stga
+      database: simrs_rsudinda
       table: dc_kelas
 
   write_conf:
@@ -680,9 +542,9 @@ fg_staging_komponen_tarif_kelas:
       numPartitions: 5
 
 fg_staging_komponen_tarif_setting_nominal:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_staging_komponen_tarif_setting_nominal
-  schema: stga
+  schema: simrs_dw_stga
   #write_credentials_key: mysqllocalolap
   #write_database: olap
   script_type: scala
@@ -690,11 +552,11 @@ fg_staging_komponen_tarif_setting_nominal:
 
   read_conf:
     dc_detail_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_detail_komponen_tarif
 
     dc_setting_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_setting_komponen_tarif
 
   write_conf:
@@ -715,9 +577,9 @@ fg_staging_komponen_tarif_setting_nominal:
       numPartitions: 5
 
 fg_staging_komponen_tarif_total:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat
   table: fg_staging_komponen_tarif_total
-  schema: stga
+  schema: simrs_dw_stga
   #write_credentials_key: mysqllocalolap
   #write_database: olap
   script_type: scala
@@ -725,11 +587,11 @@ fg_staging_komponen_tarif_total:
 
   read_conf:
     dc_detail_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_detail_komponen_tarif
 
     dc_setting_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_setting_komponen_tarif
 
   write_conf:
@@ -745,27 +607,27 @@ fg_staging_komponen_tarif_total:
       numPartitions: 5
 
 fg_staging_komponen_tarif_total_penjamin:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat
   table: fg_staging_komponen_tarif_total_penjamin
-  schema: stga
+  schema: simrs_dw_stga
   script_type: scala
   script_location: etl_pipeline.scripts.staging.FgStagingKomponenTarifTotalPenjamin
 
   read_conf:
     dc_detail_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_detail_komponen_tarif
 
     dc_setting_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_setting_komponen_tarif
 
     dc_penjamin:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_penjamin
 
     dc_penjamin_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_penjamin_komponen_tarif
 
   write_conf:
@@ -783,15 +645,15 @@ fg_staging_komponen_tarif_total_penjamin:
       numPartitions: 5
 
 fg_staging_komponen_tarif_penjamin:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat
   table: fg_staging_komponen_tarif_penjamin
-  schema: stga
+  schema: simrs_dw_stga
   script_type: scala
   script_location: etl_pipeline.scripts.staging.FgStagingKomponenTarifPenjamin
 
   read_conf:
     dc_detail_komponen_tarif:
-      database: stga
+      database: simrs_astrini_bai
       table: dc_detail_komponen_tarif
 
   write_conf:
@@ -816,35 +678,39 @@ fg_staging_komponen_tarif_penjamin:
       numPartitions: 5
 
 fg_mart_export_tarif:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_mart_export_tarif
-  schema: stga
+  schema: simrs_rsudinda_mart
   script_type: scala
   script_location: etl_pipeline.scripts.mart.FgMartExportTarif
 
   read_conf:
     dc_komponen_tarif:
-      database: stga
+      database: simrs_rsudinda
       table: dc_komponen_tarif
 
     dc_layanan:
-      database: stga
+      database: simrs_rsudinda
       table: dc_layanan
 
     dc_bobot:
-      database: stga
+      database: simrs_rsudinda
       table: dc_bobot
 
     dc_unit:
-      database: stga
+      database: simrs_rsudinda
       table: dc_unit
 
-    fg_staging_komponen_tarif_kelas:
-      database: stga
-      table: fg_staging_komponen_tarif_kelas
+    dc_kelas_komponen_tarif:
+      database: simrs_rsudinda
+      table: dc_kelas_komponen_tarif
+
+    dc_kelas:
+      database: simrs_rsudinda
+      table: dc_kelas
 
     fg_staging_komponen_tarif_detail:
-      database: stga
+      database: simrs_rsudinda_mart
       table: fg_staging_komponen_tarif_detail
 
   write_conf:
@@ -901,9 +767,9 @@ fg_mart_export_tarif:
       numPartitions: 5
 
 fg_staging_komponen_tarif_detail:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_staging_komponen_tarif_detail
-  schema: stga
+  schema: simrs_rsudinda_mart
   #write_credentials_key: mysqllocalolap
   #write_database: olap
   script_type: scala
@@ -911,19 +777,19 @@ fg_staging_komponen_tarif_detail:
 
   read_conf:
     dc_detail_komponen_tarif:
-      database: stga
+      database: simrs_rsudinda
       table: dc_detail_komponen_tarif
 
     dc_setting_komponen_tarif:
-      database: stga
+      database: simrs_rsudinda
       table: dc_setting_komponen_tarif
 
     dc_penjamin:
-      database: stga
+      database: simrs_rsudinda
       table: dc_penjamin
 
     dc_jenis_pemeriksaan:
-      database: stga
+      database: simrs_rsudinda
       table: dc_jenis_pemeriksaan
 
   write_conf:
@@ -950,51 +816,66 @@ fg_staging_komponen_tarif_detail:
       numPartitions: 5
 
 fg_fact_mutu_rawat_jalan:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_fact_mutu_rawat_jalan
-  schema: stga
+  schema: simrs_ums_mart
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactMutuRawatJalan
-  partitionColumn: "id"
-  lowerBound: "1"
-  upperBound: "10000000"
-  numPartitions: 20
 
   read_conf:
 
     dc_pendaftaran:
-      database: stga
+      database: simrs_ums
       table: dc_pendaftaran
-      filter: "substring(waktu_daftar, 1, 10) between '{~~~%Y-%m-01:month=1~~~}' and '{~~~%Y-%m-%d:day=1~~~}' and lower(rawat) = 'jalan' and status not in ('Batal', 'Booking')"
+      filter: "substring(waktu_daftar,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_daftar,1,10) < '{~~~%Y-%m-%d:day=1~~~}' and lower(rawat) = 'jalan' and status not in ('Batal','Booking')"
 
     dc_layanan_pendaftaran:
-      database: stga
+      database: simrs_ums
       table: dc_layanan_pendaftaran
-      filter: "substring(waktu, 1, 10) between '{~~~%Y-%m-01:month=1~~~}' and '{~~~%Y-%m-%d:day=0~~~}' and status not in ('Batal', 'Belum')"
+      filter: "substring(waktu,1,10) < '{~~~%Y-%m-01:day=0~~~}' and status not in ('Batal','Belum')"
 
     dc_spesialisasi:
-      database: stga
+      database: simrs_ums
       table: dc_spesialisasi
+
+    dc_taskid_bpjs:
+      database: simrs_ums
+      table: dc_taskid_bpjs
+      filter: "substring(waktu_rs,1,10) < '{~~~%Y-%m-01:day=0~~~}' and task_id in (3,4)"
+
+    dc_nakes:
+      database: simrs_ums
+      table: dc_nakes
+
+    dc_pegawai:
+      database: simrs_ums
+      table: dc_pegawai
 
   write_conf:
     mode: overwrite
 
     schema:
+
       - column_name: id
         type: bigint
-        constraint: primary_key,not_null
 
-      - column_name: waktu_daftar
-        type: timestamp
-        default: null
+      - column_name: no_register
+        type: varchar(30)
 
-      - column_name: waktu_konfirm_booking
-        type: timestamp
-        default: null
+      - column_name: no_rm
+        type: varchar(10)
 
-      - column_name: waktu_periksa
+      - column_name: nama_dokter
+        type: varchar(255)
+
+      - column_name: spesialisasi
+        type: varchar(255)
+
+      - column_name: waktu_task_3
         type: timestamp
-        default: null
+
+      - column_name: waktu_task_4
+        type: timestamp
 
       - column_name: selisih_menit
         type: bigint
@@ -1023,13 +904,13 @@ fg_fact_mutu_rawat_jalan:
       numPartitions: 20
 
 fg_agg_mutu_fornas:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_agg_mutu_fornas
-  schema: mart
+  schema: simrs_ums_mart
   script_type: scala
   script_location: etl_pipeline.scripts.agg.FgAggMutuFornas
 
-  partitionColumn: "id_penjualan"
+  partitionColumn: "id"
   lowerBound: "1"
   upperBound: "10000000"
   numPartitions: 20
@@ -1037,42 +918,42 @@ fg_agg_mutu_fornas:
   read_conf:
 
     dc_penjualan:
-      database: operasional
+      database: simrs_ums
       table: dc_penjualan
-      filter: "tanggal_penjualan >= '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "date(waktu) < '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_detail_penjualan:
-      database: operasional
+      database: simrs_ums
       table: dc_detail_penjualan
-      filter: "date(waktu) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "date(waktu) < '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_users:
-      database: operasional
+      database: simrs_ums
       table: dc_users
 
     dc_group_users:
-      database: operasional
+      database: simrs_ums
       table: dc_group_users
 
     dc_layanan_pendaftaran:
-      database: operasional
+      database: simrs_ums
       table: dc_layanan_pendaftaran
 
     dc_pendaftaran:
-      database: operasional
+      database: simrs_ums
       table: dc_pendaftaran
-      filter: "date(waktu_daftar) = '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "date(waktu_daftar) < '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_spesialisasi:
-      database: operasional
+      database: simrs_ums
       table: dc_spesialisasi
 
     fg_dim_pengemasan_barang:
-      database: stga
+      database: simrs_ums_mart
       table: fg_dim_pengemasan_barang
 
     fg_dim_waktu:
-      database: simrs_dw_stga
+      database: simrs_ums_mart
       table: fg_dim_waktu
 
   write_conf:
@@ -1080,7 +961,7 @@ fg_agg_mutu_fornas:
 
     schema:
 
-      - column_name: id_penjualan
+      - column_name: id
         type: bigint
         constraint: primary_key,not_null
 
@@ -1139,35 +1020,38 @@ fg_agg_mutu_fornas:
       numPartitions: 20
 
 fg_fact_mutu_kepatuhan_identifikasi_pasien:
-  <<: *mysql_conf_local_olap
+  <<: *mysql_conf_uat_ii
   table: fg_fact_mutu_kepatuhan_identifikasi_pasien
-  schema: stga
+  schema: simrs_ums_mart
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactMutuKepatuhanIdentifikasiPasien
 
   read_conf:
     fg_fact_penjualan_barang:
-      database: stga
+      database: simrs_ums_mart
       table: fg_fact_penjualan_barang
     dc_jadwal_kamar_operasi:
-      database: stga
+      database: simrs_ums
       table: dc_jadwal_kamar_operasi
     dc_diagnosa:
-      database: stga
+      database: simrs_ums
       table: dc_diagnosa
     dc_layanan_pendaftaran:
-      database: stga
+      database: simrs_ums
       table: dc_layanan_pendaftaran
-      filter: "DATE(waktu) = '{~~~%Y-%m-%d:day=1~~~}'"  # Memfilter data pendaftaran berdasarkan tanggal run ETL
+      filter: "DATE(waktu) < '{~~~%Y-%m-%d:day=0~~~}'"  # Memfilter data pendaftaran berdasarkan tanggal run ETL
     dc_pendaftaran:
-      database: stga
+      database: simrs_ums
       table: dc_pendaftaran
     dc_pasien:
-      database: stga
+      database: simrs_ums
       table: dc_pasien
     fg_dim_waktu:
-      database: stga
+      database: simrs_ums_mart
       table: fg_dim_waktu
+    fg_dim_pengemasan_barang:
+      database: simrs_ums_mart
+      table: fg_dim_pengemasan_barang
 
   write_conf:
     mode: overwrite
@@ -1208,27 +1092,24 @@ fg_fact_mutu_kepatuhan_identifikasi_pasien:
         type: date
         index: true
 
-fg_fact_mutu_scp:
-  <<: *mysql_conf_uat
-  table: fg_fact_mutu_scp
-  schema: simrs_dw_stga
+fg_fact_mutu_visite_dokter:
+  <<: *postgres_conf_uat
+  write_credentials_key: mysqldev_2
+  write_database: simrs_ums_mart
+  table: fg_fact_mutu_visite_dokter
+  schema: simrs_ums_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuScp
+  script_location: etl_pipeline.scripts.fact.FgFactMutuVisiteDokter
 
   read_conf:
 
-    dc_jadwal_kamar_operasi:
-      database: simrs_astrini_bai
-      table: dc_jadwal_kamar_operasi
-      filter: "substring(tanggal,1,10) < '{~~~%Y-%m-01:month=1~~~}' and status not in ('Canceled','Request')"
-
-    dc_diagnosa:
-      database: simrs_astrini_bai
-      table: dc_diagnosa
-
-    dc_golongan_sebab_sakit:
-      database: simrs_astrini_bai
-      table: dc_golongan_sebab_sakit
+    document_history_list:
+      database: e_doc_ums.public
+      table: document_history_list
+      filter: >
+        date(created_time) < '{~~~%Y-%m-%d:day=0~~~}' and 
+        document_code = 'CPPT1' and
+        label = 'Rawat Inap'
 
   write_conf:
     mode: overwrite
@@ -1238,29 +1119,32 @@ fg_fact_mutu_scp:
       - column_name: id
         type: bigint
 
-      - column_name: id_pasien
-        type: bigint
+      - column_name: no_rm
+        type: text
 
-      - column_name: id_layanan_pendaftaran
-        type: bigint
+      - column_name: pasien
+        type: varchar(255)
 
-      - column_name: no_daftar_terperinci
-        type: varchar(50)
+      - column_name: klinik
+        type: varchar(255)
 
-      - column_name: tanggal
-        type: timestamp
+      - column_name: dokter
+        type: varchar(255)
 
-      - column_name: mulai
-        type: timestamp
+      - column_name: tanggal_masuk
+        type: varchar(20)
 
-      - column_name: selesai
-        type: timestamp
+      - column_name: tanggal_visite
+        type: varchar(20)
 
-      - column_name: selisih_menit
-        type: bigint
+      - column_name: jam
+        type: varchar(10)
+
+      - column_name: pemeriksaan
+        type: text
 
       - column_name: status
-        type: varchar(100)
+        type: varchar(50)
 
       - column_name: tahun
         type: int
@@ -1278,8 +1162,325 @@ fg_fact_mutu_scp:
         type: date
         index: true
 
-    options:
-      batchsize: 1000
-=======
->>>>>>> 285d8b503a14e9ae25d1dc7646668d22e4806eb8
-      numPartitions: 20
+fg_staging_document_history_list:
+  <<: *postgres_conf_uat
+  write_credentials_key: mysqldev_2
+  write_database: simrs_ums_mart
+  table: fg_staging_document_history_list
+  schema: simrs_ums_mart
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgStagingDocumentHistoryList
+
+  read_conf:
+
+    document_history_list:
+      database: e_doc_ums.public
+      table: document_history_list
+      filter: "title like '%Lab%' and document_code = 'UP'"
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+
+      - column_name: id
+        type: bigint
+
+      - column_name: created_time
+        type: timestamp
+
+      - column_name: urutan_lab
+        type: bigint
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+fg_fact_mutu_hasil_lab_kritis:
+  <<: *mysql_conf_uat_ii
+  table: fg_fact_mutu_hasil_lab_kritis
+  schema: simrs_ums_mart
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgFactMutuHasilLabKritis
+
+  read_conf:
+
+    document_history_list:
+      database: simrs_ums_mart
+      table: fg_staging_document_history_list
+
+    dc_laboratorium:
+      database: simrs_ums
+      table: dc_laboratorium
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+
+      - column_name: id
+        type: bigint
+
+      - column_name: doc_his_id
+        type: bigint
+
+      - column_name: waktu_konfirm
+        type: timestamp
+
+      - column_name: waktu_hasil
+        type: timestamp
+
+      - column_name: waktu_unggah
+        type: timestamp
+
+      - column_name: selisih_menit
+        type: bigint
+
+      - column_name: status
+        type: varchar(50)
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+fg_fact_mutu_scp:
+  <<: *postgres_conf_uat
+  write_credentials_key: mysqldev_2
+  write_database: simrs_ums_mart
+  table: fg_fact_mutu_scp
+  schema: simrs_ums_mart
+
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgFactMutuScp
+
+  read_conf:
+
+    document_history_list:
+      database: e_doc_ums.public
+      table: document_history_list
+      filter: >
+        date(created_time) < '{~~~%Y-%m-01:day=0~~~}' and
+        title IN (
+          'Laporan Operasi',
+          'Serah Terima Pasien Pre Operasi'
+        )
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+
+      - column_name: id
+        type: bigint
+
+      - column_name: no_rm
+        type: varchar(50)
+
+      - column_name: nama_pasien
+        type: varchar(255)
+
+      - column_name: dokter_bedah
+        type: varchar(255)
+
+      - column_name: icd_x
+        type: varchar(20)
+
+      - column_name: diagnosa
+        type: text
+
+      - column_name: tanggal_operasi
+        type: date
+
+      - column_name: jam_asesmen
+        type: varchar(10)
+
+      - column_name: jam_operasi
+        type: varchar(10)
+
+      - column_name: selisih_menit
+        type: bigint
+
+      - column_name: status
+        type: varchar(50)
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+fg_fact_mutu_pasien_jatuh:
+  <<: *postgres_conf_uat
+  write_credentials_key: mysqldev_2
+  write_database: simrs_ums_mart
+  table: fg_fact_mutu_pasien_jatuh
+  schema: simrs_ums_mart
+
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgFactMutuPasienJatuh
+
+  read_conf:
+    document_history_list:
+      database: e_doc_ums.public
+      table: document_history_list
+      filter: >
+        date(created_time) < '{~~~%Y-%m-%d:day=0~~~}' and
+        document_code IN (
+          'RM21a_K',
+          'RM21b_K',
+          'RM21c_K',
+          'RM101'
+        )
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+      - column_name: id
+        type: bigint
+
+      - column_name: no_rm
+        type: varchar(50)
+
+      - column_name: pasien
+        type: varchar(255)
+
+      - column_name: tanggal
+        type: varchar(50)
+
+      - column_name: bangsal
+        type: varchar(50)
+
+      - column_name: petugas
+        type: varchar(255)
+
+      - column_name: total_skor
+        type: int
+
+      - column_name: kategori_risiko
+        type: varchar(50)
+
+      - column_name: total_asesmen
+        type: int
+
+      - column_name: asesmen_awal
+        type: varchar(20)
+
+      - column_name: asesmen_ulang
+        type: varchar(20)
+
+      - column_name: intervensi
+        type: varchar(20)
+
+      - column_name: status
+        type: varchar(30)
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+fg_fact_mutu_identifikasi_pasien:
+  <<: *postgres_conf_uat
+  write_credentials_key: mysqldev_2
+  write_database: simrs_ums_mart
+  table: fg_fact_mutu_identifikasi_pasien
+  schema: simrs_ums_mart
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgFactMutuIdentifikasiPasien
+
+  read_conf:
+    document_history_list:
+      database: e_doc_ums.public
+      table: document_history_list
+      filter: date(created_time) < '{~~~%Y-%m-%d:day=0~~~}' and document_code = 'RM102'
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+      - column_name: id
+        type: bigint
+        index: true
+
+      - column_name: no_rm
+        type: varchar(20)
+
+      - column_name: pasien
+        type: varchar(255)
+
+      - column_name: verifikasi
+        type: varchar(255)
+
+      - column_name: nama_verifikator
+        type: varchar(255)
+
+      - column_name: identifikasi_nama
+        type: varchar(10)
+
+      - column_name: identifikasi_tanggal_lahir
+        type: varchar(10)
+
+      - column_name: status
+        type: varchar(50)
+
+      - column_name: tahun
+        type: int
+        index: true
+      
+      - column_name: triwulan
+        type: varchar(3)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true

@@ -1,0 +1,346 @@
+import requests
+from metabase_api import Metabase_API
+from difflib import get_close_matches
+
+URL_ASAL = "http://dev.farmagitechs.co.id:3001/"
+EMAIL_ASAL = "baidarus555@gmail.com"
+PASSWORD_ASAL = "12454hn121th1k"
+DASHBOARD_ID_YANG_MAU_DIPINDAH = 4
+
+URL_TUJUAN = "http://12.12.1.155:3000"
+EMAIL_TUJUAN = "userums@gmail.com"
+PASSWORD_TUJUAN = "ums_4nalytics"
+ID_KOLEKSI_TUJUAN = None
+
+ID_DATABASE_ASAL = 3
+ID_DATABASE_TUJUAN = 2
+
+print("🔄 Menghubungkan ke kedua server Metabase...")
+source_mb = Metabase_API(domain=URL_ASAL, email=EMAIL_ASAL, password=PASSWORD_ASAL)
+target_mb = Metabase_API(domain=URL_TUJUAN, email=EMAIL_TUJUAN, password=PASSWORD_TUJUAN)
+headers_tujuan = {"X-Metabase-Session": target_mb.session_id, "Content-Type": "application/json"}
+print("✅ Koneksi berhasil!")
+
+# ── Build index lengkap ────────────────────────────────────────────────────
+def index_tables(mb, db_id):
+    meta = mb.get(f"/api/database/{db_id}/metadata")
+    by_name = {}   # tname -> {id, fields: {fname -> field_info}}
+    by_id   = {}   # table_id -> tname
+    for t in meta.get('tables', []):
+        tname = t['name'].lower()
+        by_id[t['id']] = tname
+        fields_by_name = {}
+        fields_by_id   = {}
+        for f in t.get('fields', []):
+            fname = f['name'].lower()
+            info  = {
+                'id': f['id'],
+                'name': f['name'],
+                'base_type': f.get('base_type', ''),
+                'table_id': t['id'],
+                'table_name': t['name'],
+            }
+            fields_by_name[fname] = info
+            fields_by_id[f['id']] = info
+        by_name[tname] = {'id': t['id'], 'fields_by_name': fields_by_name,
+                          'fields_by_id': fields_by_id}
+    return by_name, by_id
+
+print("🗺️ Membangun mapping tabel & field...")
+src_by_name, src_by_id = index_tables(source_mb, ID_DATABASE_ASAL)
+tgt_by_name, tgt_by_id = index_tables(target_mb, ID_DATABASE_TUJUAN)
+
+# Buat flat lookup: src_field_id -> field info di source (termasuk table name)
+src_field_flat = {}
+for tname, tinfo in src_by_name.items():
+    for fid, finfo in tinfo['fields_by_id'].items():
+        src_field_flat[fid] = finfo
+
+table_id_map = {}
+field_id_map = {}
+fuzzy_log    = []
+
+def find_tgt_table(src_tname):
+    """Cari tabel di target: exact match dulu, lalu fuzzy."""
+    if src_tname in tgt_by_name:
+        return src_tname
+    matches = get_close_matches(src_tname, tgt_by_name.keys(), n=1, cutoff=0.6)
+    if matches:
+        fuzzy_log.append(f"  Tabel fuzzy: '{src_tname}' → '{matches[0]}'")
+        return matches[0]
+    return None
+
+def find_tgt_field(tgt_tname, src_fname):
+    """Cari field di target table: exact match dulu, lalu fuzzy."""
+    tgt_fields = tgt_by_name[tgt_tname]['fields_by_name']
+    if src_fname in tgt_fields:
+        return tgt_fields[src_fname]
+    matches = get_close_matches(src_fname, tgt_fields.keys(), n=1, cutoff=0.7)
+    if matches:
+        fuzzy_log.append(f"  Field fuzzy: '{src_fname}' → '{matches[0]}' (tabel: {tgt_tname})")
+        return tgt_fields[matches[0]]
+    return None
+
+# Build mapping
+for src_tname, src_tinfo in src_by_name.items():
+    tgt_tname = find_tgt_table(src_tname)
+    if not tgt_tname:
+        continue
+    table_id_map[src_tinfo['id']] = tgt_by_name[tgt_tname]['id']
+    for src_fname, src_finfo in src_tinfo['fields_by_name'].items():
+        tgt_finfo = find_tgt_field(tgt_tname, src_fname)
+        if tgt_finfo:
+            field_id_map[src_finfo['id']] = tgt_finfo['id']
+
+print(f"✅ {len(table_id_map)} tabel, {len(field_id_map)} field berhasil di-map.")
+if fuzzy_log:
+    print("🔀 Fuzzy match yang digunakan:")
+    for log in fuzzy_log:
+        print(log)
+
+# ── Remap GUI query (rekursif) ─────────────────────────────────────────────
+def remap_query(obj):
+    if isinstance(obj, dict):
+        new_obj = {}
+        for k, v in obj.items():
+            if k == 'source-table' and isinstance(v, int):
+                new_obj[k] = table_id_map.get(v, v)
+            elif k == 'database' and v == ID_DATABASE_ASAL:
+                new_obj[k] = ID_DATABASE_TUJUAN
+            else:
+                new_obj[k] = remap_query(v)
+        return new_obj
+    elif isinstance(obj, list):
+        result = [remap_query(v) for v in obj]
+        if len(result) >= 2 and result[0] == 'field' and isinstance(result[1], int):
+            result[1] = field_id_map.get(result[1], result[1])
+        return result
+    return obj
+
+# ── Remap template-tags (native SQL field filter) ──────────────────────────
+def remap_template_tags(template_tags, src_table_id=None):
+    """
+    Otomatis remap field filter di template-tags.
+    Strategi:
+    1. Cari field berdasarkan dimension field ID → field_id_map
+    2. Jika tidak ketemu, cari berdasarkan nama tag + nama tabel query
+    3. Jika tidak ketemu, cari fuzzy berdasarkan nama tag di semua tabel tujuan
+    """
+    if not isinstance(template_tags, dict):
+        return template_tags
+
+    # Cari nama tabel asal dari src_table_id
+    src_tname = src_by_id.get(src_table_id, '') if src_table_id else ''
+    tgt_tname = find_tgt_table(src_tname) if src_tname else None
+
+    new_tags = {}
+    for tag_name, tag_val in template_tags.items():
+        if not isinstance(tag_val, dict):
+            new_tags[tag_name] = tag_val
+            continue
+
+        new_tag = dict(tag_val)
+        tag_type = tag_val.get('type', '')
+
+        if tag_type == 'dimension':
+            dim = tag_val.get('dimension')
+            old_fid = None
+
+            if isinstance(dim, list) and len(dim) >= 2 and dim[0] == 'field' and isinstance(dim[1], int):
+                old_fid = dim[1]
+
+            new_fid = None
+
+            # Strategi 1: field_id_map langsung
+            if old_fid and old_fid in field_id_map:
+                new_fid = field_id_map[old_fid]
+
+            # Strategi 2: cari di tabel yang sama berdasarkan nama tag
+            if not new_fid and tgt_tname:
+                tgt_finfo = find_tgt_field(tgt_tname, tag_name.lower())
+                if tgt_finfo:
+                    new_fid = tgt_finfo['id']
+
+            # Strategi 3: cari di source field info, lalu match ke target
+            if not new_fid and old_fid and old_fid in src_field_flat:
+                src_finfo = src_field_flat[old_fid]
+                src_fname  = src_finfo['name'].lower()
+                src_tbname = src_finfo['table_name'].lower()
+                tgt_tbname = find_tgt_table(src_tbname)
+                if tgt_tbname:
+                    tgt_finfo = find_tgt_field(tgt_tbname, src_fname)
+                    if tgt_finfo:
+                        new_fid = tgt_finfo['id']
+
+            # Strategi 4: fuzzy search nama tag di SEMUA tabel tujuan
+            if not new_fid:
+                for tname_t, tinfo_t in tgt_by_name.items():
+                    tgt_finfo = find_tgt_field(tname_t, tag_name.lower())
+                    if tgt_finfo:
+                        new_fid = tgt_finfo['id']
+                        fuzzy_log.append(
+                            f"  Tag '{tag_name}' ditemukan di tabel tujuan '{tname_t}'"
+                        )
+                        break
+
+            if new_fid:
+                new_tag['dimension'] = ['field', new_fid] + (list(dim[2:]) if dim else [])
+                new_tag['field-id']  = new_fid
+                print(f"      🔗 Tag '{tag_name}': field {old_fid} → {new_fid}")
+            else:
+                # Hapus dimension agar tidak error, ubah jadi text filter biasa
+                print(f"      ⚠️  Tag '{tag_name}': field {old_fid} tidak ditemukan → fallback ke text")
+                new_tag.pop('dimension', None)
+                new_tag.pop('field-id', None)
+                new_tag['type'] = 'text'
+                new_tag.pop('widget-type', None)
+
+        new_tags[tag_name] = new_tag
+
+    return new_tags
+
+# ── Migrasi utama ──────────────────────────────────────────────────────────
+print(f"\n📦 Mengambil dashboard asal (ID: {DASHBOARD_ID_YANG_MAU_DIPINDAH})...")
+dash_data = source_mb.get(f"/api/dashboard/{DASHBOARD_ID_YANG_MAU_DIPINDAH}")
+
+print("📋 Membuat dashboard baru...")
+res_dash = requests.post(
+    f"{URL_TUJUAN.rstrip('/')}/api/dashboard",
+    headers=headers_tujuan,
+    json={"name": dash_data['name'], "collection_id": ID_KOLEKSI_TUJUAN}
+)
+if res_dash.status_code != 200:
+    raise Exception(f"Gagal: {res_dash.text}")
+
+new_dash_id = res_dash.json()['id']
+print(f"✅ Dashboard baru ID: {new_dash_id}")
+
+# Tab
+tabs = dash_data.get('tabs', [])
+tab_mapping = {}
+new_tabs_payload = []
+fake_tab_counter = -1
+for tab in tabs:
+    fid = fake_tab_counter
+    tab_mapping[tab['id']] = fid
+    new_tabs_payload.append({"id": fid, "name": tab['name']})
+    fake_tab_counter -= 1
+
+# Cards
+cards = dash_data.get('ordered_cards', dash_data.get('dashcards', dash_data.get('cards', [])))
+print(f"🚀 Ditemukan {len(cards)} komponen...")
+
+new_dashcards   = []
+fake_card_counter = -1
+
+for index, item in enumerate(cards, 1):
+    old_card   = item.get('card')
+    old_tab_id = item.get('dashboard_tab_id')
+    new_tab_id = tab_mapping.get(old_tab_id) if old_tab_id else None
+
+    vis_settings  = item.get('visualization_settings') or {}
+    param_mappings = item.get('parameter_mappings') or []
+    target_card_id = None
+    component_name = "Teks/Widget"
+
+    if old_card and 'id' in old_card:
+        card_id        = old_card['id']
+        component_name = old_card.get('name', 'Untitled')
+
+        try:
+            card_detail   = source_mb.get(f"/api/card/{card_id}")
+            dataset_query = card_detail.get('dataset_query', {})
+            query_type    = dataset_query.get('type', '')
+
+            if dataset_query.get('database') == ID_DATABASE_ASAL:
+                dataset_query['database'] = ID_DATABASE_TUJUAN
+
+            if query_type == 'native':
+                native_part = dataset_query.get('native', {})
+                # Ambil table_id dari card untuk konteks field filter
+                src_table_id = card_detail.get('table_id')
+                if 'template-tags' in native_part:
+                    print(f"[{index}] 🔗 Remap template-tags '{component_name}'...")
+                    native_part['template-tags'] = remap_template_tags(
+                        native_part['template-tags'], src_table_id
+                    )
+                dataset_query['native'] = native_part
+                table_id = None
+
+            elif query_type == 'query':
+                dataset_query = remap_query(dataset_query)
+                raw_tid = card_detail.get('table_id')
+                table_id = table_id_map.get(raw_tid) if raw_tid else None
+            else:
+                dataset_query = remap_query(dataset_query)
+                table_id = None
+
+            card_vis = card_detail.get('visualization_settings') or {}
+
+            res_card = requests.post(
+                f"{URL_TUJUAN.rstrip('/')}/api/card",
+                headers=headers_tujuan,
+                json={
+                    "name": card_detail.get('name'),
+                    "description": card_detail.get('description'),
+                    "display": card_detail.get('display'),
+                    "visualization_settings": card_vis,
+                    "dataset_query": dataset_query,
+                    "collection_id": ID_KOLEKSI_TUJUAN,
+                    "table_id": table_id
+                }
+            )
+
+            if res_card.status_code == 200:
+                target_card_id = res_card.json()['id']
+                print(f"[{index}/{len(cards)}] ✅ '{component_name}' (ID: {target_card_id})")
+            else:
+                print(f"[{index}/{len(cards)}] ❌ '{component_name}': {res_card.text[:200]}")
+                continue
+
+        except Exception as e:
+            print(f"[{index}/{len(cards)}] ❌ Error '{component_name}': {e}")
+            continue
+    else:
+        print(f"[{index}/{len(cards)}] 📝 Teks/Widget")
+
+    dashcard_entry = {
+        "id": fake_card_counter,
+        "card_id": target_card_id,
+        "size_x": item.get('size_x', 4),
+        "size_y": item.get('size_y', 4),
+        "row": item.get('row', 0),
+        "col": item.get('col', 0),
+        "parameter_mappings": param_mappings,
+        "visualization_settings": vis_settings,
+    }
+    if new_tab_id is not None:
+        dashcard_entry["dashboard_tab_id"] = new_tab_id
+
+    new_dashcards.append(dashcard_entry)
+    fake_card_counter -= 1
+
+# PUT sekaligus
+print(f"\n📌 PUT {len(new_tabs_payload)} tab + {len(new_dashcards)} komponen...")
+put_payload = {"dashcards": new_dashcards}
+if new_tabs_payload:
+    put_payload["tabs"] = new_tabs_payload
+
+res_put = requests.put(
+    f"{URL_TUJUAN.rstrip('/')}/api/dashboard/{new_dash_id}",
+    headers=headers_tujuan,
+    json=put_payload
+)
+
+if res_put.status_code in [200, 201]:
+    result = res_put.json()
+    print(f"✅ {len(result.get('tabs',[]))} tab, {len(result.get('dashcards',[]))} komponen terpasang.")
+else:
+    print(f"❌ PUT gagal: {res_put.status_code} - {res_put.text[:300]}")
+
+if fuzzy_log:
+    print("\n🔀 Fuzzy match yang digunakan:")
+    for log in fuzzy_log:
+        print(log)
+
+print(f"\n🎉 SELESAI! Dashboard ID {new_dash_id}")

@@ -48,9 +48,7 @@ object FgFactMutuIdentifikasiPasien extends Transformer {
           col("emr_data"),
           col("created_time")
         )
-        .filter(
-          col("document_code") === "RM102"
-        )
+        .filter(documentHistoryList("filter").toString)
 
     // 2. Definisi Schema untuk Array data_list di dalam JSON
     val dataListSchema =
