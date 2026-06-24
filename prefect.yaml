@@ -47,3 +47,10 @@ deployments:
       name: default-agent-pool
     schedule:
       cron: "1 0 1 * *"
+
+  - name: rekap-penggunaan-barang
+    entrypoint: scheduler/rekap_penggunaan_barang.py:rekap_penggunaan_barang_flow
+    work_pool:
+      name: default-agent-pool
+    schedule:
+      cron: "1 0 1 * *"

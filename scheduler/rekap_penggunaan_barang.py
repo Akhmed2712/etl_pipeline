@@ -1,7 +1,11 @@
 from prefect import flow, task, get_run_logger
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 
+
+# =====================================================
+# TASK EXECUTOR (UNCHANGED CORE)
+# =====================================================
 @task(
     name="Rekap Penggunaan Barang",
     retries=3,
@@ -10,13 +14,23 @@ import subprocess
 )
 def execute_spark_job(jar, catalog, resource, start_date):
     logger = get_run_logger()
+
     script_path = "./run_spark.sh"
-    cmd = ["bash", script_path, jar, catalog, resource, start_date]
-    logger.info(f"Starting Spark job: {resource} | date: {start_date}")
+
+    cmd = [
+        "bash",
+        script_path,
+        jar,
+        catalog,
+        resource,
+        start_date
+    ]
+
+    logger.info(f"Running: {resource} | date={start_date}")
 
     process = subprocess.Popen(
         cmd,
-        cwd="/opt/prefect/projects",
+        cwd="/opt/prefect",
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -24,72 +38,112 @@ def execute_spark_job(jar, catalog, resource, start_date):
     )
 
     for line in iter(process.stdout.readline, ""):
-        line = line.rstrip()
         if line:
-            logger.info(line)
+            logger.info(line.rstrip())
 
     process.stdout.close()
     process.wait()
 
     if process.returncode != 0:
         raise Exception(
-            f"Spark job '{resource}' failed with exit code {process.returncode}"
+            f"Spark job '{resource}' failed (code={process.returncode})"
         )
 
-    logger.info(f"Spark job '{resource}' finished successfully")
     return True
 
 
+# =====================================================
+# HELPER: DATE RANGE GENERATOR
+# =====================================================
+def generate_dates(start_date: str, end_date: str | None):
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+
+    if not end_date:
+        yield start_date
+        return
+
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+
+    current = start
+    while current <= end:
+        yield current.strftime("%Y-%m-%d")
+        current += timedelta(days=1)
+
+
+# =====================================================
+# MAIN FLOW (RANGE-AWARE)
+# =====================================================
 @flow(name="Rekap Penggunaan Barang")
-def rekap_penggunaan_barang_flow(start_date: str = datetime.now().strftime("%Y-%m-%d")):
+def rekap_penggunaan_barang_flow(
+    start_date: str = datetime.now().strftime("%Y-%m-%d"),
+    end_date: str | None = None
+):
+
     logger = get_run_logger()
-    logger.info(f"Starting flow for date: {start_date}")
+    logger.info(f"Start flow: {start_date} -> {end_date}")
 
-    # Stage 1: Dimension tables (paralel)
-    f1 = execute_spark_job.submit(
-        "etl-pipeline-assembly-1.0.0.jar",
-        "fg_dim_pengemasan_barang",
-        "fg_dim_pengemasan_barang",
-        start_date
-    )
-    f2 = execute_spark_job.submit(
-        "etl-pipeline-assembly-1.0.0.jar",
-        "fg_dim_nakes",
-        "fg_dim_nakes",
-        start_date
-    )
+    jar = "etl-pipeline-assembly-1.0.0.jar"
 
-    # Stage 2: Fact tables (paralel, tunggu f1 & f2)
-    f3 = execute_spark_job.submit(
-        "etl-pipeline-assembly-1.0.0.jar",
-        "fg_fact_penjualan_barang",
-        "fg_fact_penjualan_barang",
-        start_date,
-        wait_for=[f1, f2]
-    )
-    f4 = execute_spark_job.submit(
-        "etl-pipeline-assembly-1.0.0.jar",
-        "fg_fact_retur_barang",
-        "fg_fact_retur_barang",
-        start_date,
-        wait_for=[f1, f2]
-    )
+    for run_date in generate_dates(start_date, end_date):
 
-    # Stage 3: Rekap final (tunggu semua)
-    f5 = execute_spark_job.submit(
-        "etl-pipeline-assembly-1.0.0.jar",
-        "fg_fact_rekap_penggunaan_barang",
-        "fg_fact_rekap_penggunaan_barang",
-        start_date,
-        wait_for=[f1, f2, f3, f4]
-    )
+        logger.info(f"==============================")
+        logger.info(f"RUNNING DATE: {run_date}")
+        logger.info(f"==============================")
 
-    f5.result()
-    logger.info("Flow completed successfully")
+        # =================================================
+        # STAGE 1: DIMENSIONS (parallel per day)
+        # =================================================
+        f1 = execute_spark_job.submit(
+            jar,
+            "fg_dim_pengemasan_barang",
+            "fg_dim_pengemasan_barang",
+            run_date
+        )
+
+        f2 = execute_spark_job.submit(
+            jar,
+            "fg_dim_nakes",
+            "fg_dim_nakes",
+            run_date
+        )
+
+        # =================================================
+        # STAGE 2: FACT (wait dim)
+        # =================================================
+        f3 = execute_spark_job.submit(
+            jar,
+            "fg_fact_penjualan_barang",
+            "fg_fact_penjualan_barang",
+            run_date,
+            wait_for=[f1, f2]
+        )
+
+        f4 = execute_spark_job.submit(
+            jar,
+            "fg_fact_retur_barang",
+            "fg_fact_retur_barang",
+            run_date,
+            wait_for=[f1, f2]
+        )
+
+        # =================================================
+        # STAGE 3: AGG (final)
+        # =================================================
+        f5 = execute_spark_job.submit(
+            jar,
+            "fg_agg_rekap_penggunaan_barang",
+            "fg_agg_rekap_penggunaan_barang",
+            run_date,
+            wait_for=[f1, f2, f3, f4]
+        )
+
+        f5.result()
+
+    logger.info("ALL DATES COMPLETED SUCCESSFULLY")
 
 
+# =====================================================
+# ENTRYPOINT
+# =====================================================
 if __name__ == "__main__":
-    rekap_penggunaan_barang_flow.serve(
-        name="rekap-penggunaan-barang",
-        cron="0 1 * * *",  # setiap hari jam 01:00
-    )
+    rekap_penggunaan_barang_flow()

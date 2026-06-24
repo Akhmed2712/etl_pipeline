@@ -14,7 +14,7 @@ mysql_conf_uat_ii: &mysql_conf_uat_ii
   layer: mysql
   env: dev
   credentials_key: mysqldev_2    # matches key in credentials/credentials.yml
-  database: simrs_ums 
+  database: simrs_rsudinda
 
 postgres_conf_uat: &postgres_conf_uat
   layer: postgres
@@ -25,37 +25,37 @@ postgres_conf_uat: &postgres_conf_uat
 fg_dim_pengemasan_barang:
   <<: *mysql_conf_uat_ii
   table: fg_dim_pengemasan_barang
-  schema: simrs_ums_mart
+  schema: simrs_rsudinda_mart
   script_type: scala
   script_location: etl_pipeline.scripts.dimension.FgDimPengemasanBarang
 
   read_conf:
     dc_barang:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_barang
 
     dc_kemasan_barang:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_kemasan_barang
 
     dc_sediaan:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_sediaan
 
     dc_golongan:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_golongan
 
     dc_kategori_barang:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_kategori_barang
 
     dc_barang_paket:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_barang_paket
 
     dc_satuan:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_satuan
 
   write_conf:
@@ -87,19 +87,19 @@ fg_dim_pengemasan_barang:
       - column_name: satuan
         type: varchar(50)
       - column_name: hna
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hpp
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: harga_jual
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_non_resep
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_resep
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_resep_rajal
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: plus_ppn
-        type: decimal(10,2)
+        type: decimal(16,2)
     options:
       batchsize: 1000
       numPartitions: 5
@@ -173,57 +173,57 @@ fg_dim_waktu:
 fg_fact_penjualan_barang:
   <<: *mysql_conf_uat_ii
   table: fg_fact_penjualan_barang
-  schema: simrs_ums_mart
+  schema: simrs_rsudinda_mart
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactPenjualanBarang
   partitionColumn: "id"
   lowerBound: "1"
-  upperBound: "3100000"
-  numPartitions: 40
+  upperBound: "10000000"
+  numPartitions: 20
 
   read_conf:
     dc_penjualan:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_detail_penjualan:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_detail_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_resep:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_resep
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_resep_bebas:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_resep_bebas
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_layanan_pendaftaran:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_layanan_pendaftaran
-      filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "date(waktu) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_pendaftaran:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_pendaftaran
-      filter: "substring(waktu_daftar, 1, 10) < '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "date(waktu_daftar) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_penjamin:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_penjamin
 
     fg_dim_pengemasan_barang:
-      database: simrs_ums_mart
+      database: simrs_rsudinda_mart
       table: fg_dim_pengemasan_barang
 
     dc_stok:
-      database: simrs_ums
+      database: simrs_rsudinda
       table: dc_stok
-      filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "date(waktu) < '{~~~%Y-%m-%d:day=1~~~}'"
 
   write_conf:
     mode: overwrite
@@ -262,13 +262,13 @@ fg_fact_penjualan_barang:
       - column_name: id_unit
         type: varchar(50)
       - column_name: jumlah
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hna
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hpp
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: harga_jual
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: partition_date
         type: date
         index: true  
@@ -277,25 +277,25 @@ fg_fact_penjualan_barang:
       numPartitions: 5
 
 fg_fact_retur_barang:
-  <<: *mysql_conf_uat
+  <<: *mysql_conf_uat_ii
   table: fg_fact_retur_barang
-  schema: simrs_dw_stga
+  schema: simrs_rsudinda_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fg_fact_retur_barang.FgFactReturBarang
+  script_location: etl_pipeline.scripts.fact.FgFactReturBarang
 
   read_conf:
     dc_retur_penjualan:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_retur_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_detur_penjualan:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_detur_penjualan
       filter: "substring(waktu, 1, 10) < '{~~~%Y-%m-%d:day=1~~~}'"
 
     dc_layanan_pendaftaran:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_layanan_pendaftaran
       filter: "substring(waktu, 1,10) < '{~~~%Y-%m-%d:day=0~~~}'"
 
@@ -348,45 +348,46 @@ fg_dim_layanan:
       batchsize: 1000
       numPartitions: 5
 
-fg_fact_rekap_penggunaan_barang:
-  <<: *mysql_conf_uat
-  table: fg_fact_rekap_penggunaan_barang
-  schema: simrs_dw_stga
+fg_agg_rekap_penggunaan_barang:
+  <<: *mysql_conf_uat_ii
+  write_database: simrs_ums_mart
+  table: fg_agg_rekap_penggunaan_barang
+  schema: simrs_rsudinda_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fg_fact_rekap_penggunaan_barang.FgFactRekapPenggunaanBarang
+  script_location: etl_pipeline.scripts.agg.FgAggRekapPenggunaanBarang
   partitionColumn: "id"
   lowerBound: "1"
   upperBound: "10000000"
-  numPartitions: 50
+  numPartitions: 20
 
   read_conf:
     fg_fact_penjualan_barang:
-      database: simrs_dw_stga
+      database: simrs_rsudinda_mart
       table: fg_fact_penjualan_barang
-      filter: "partition_date = '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "partition_date between '{~~~%Y-%m-%d:month=13~~~}' and '{~~~%Y-%m-%d:day=1~~~}'"
 
     fg_fact_retur_barang:
-      database: simrs_dw_stga
+      database: simrs_rsudinda_mart
       table: fg_fact_retur_barang
 
     fg_dim_pengemasan_barang:
-      database: simrs_dw_stga
+      database: simrs_rsudinda_mart
       table: fg_dim_pengemasan_barang
 
     dc_penjamin:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_penjamin
 
     dc_spesialisasi:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_spesialisasi
 
     fg_dim_waktu:
-      database: simrs_dw_stga
+      database: simrs_rsudinda_mart
       table: fg_dim_waktu
 
     fg_dim_nakes:
-      database: simrs_dw_stga
+      database: simrs_rsudinda_mart
       table: fg_dim_nakes
 
   write_conf:
@@ -415,19 +416,19 @@ fg_fact_rekap_penggunaan_barang:
       - column_name: cara_bayar
         type: varchar(50)
       - column_name: penjamin
-        type: varchar(50)
+        type: text
       - column_name: jumlah
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: jumlah_retur
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: jumlah_pakai
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hna
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hpp
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: harga_jual
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: subtotal_hna
         type: decimal(16,2)
       - column_name: subtotal_hpp
@@ -471,27 +472,27 @@ fg_fact_rekap_penggunaan_barang:
       numPartitions: 20
 
 fg_dim_nakes:
-  <<: *mysql_conf_uat
+  <<: *mysql_conf_uat_ii
   table: fg_dim_nakes
-  schema: simrs_dw_stga
+  schema: simrs_rsudinda_mart
   script_type: scala
-  script_location: etl_pipeline.scripts.fg_dim_nakes.FgDimNakes
+  script_location: etl_pipeline.scripts.dimension.FgDimNakes
 
   read_conf:
     dc_nakes:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_nakes
 
     dc_pegawai:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_pegawai
 
     dc_profesi:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_profesi_nakes
 
     dc_spesialisasi:
-      database: simrs_astrini_bai
+      database: simrs_rsudinda
       table: dc_spesialisasi
 
   write_conf:

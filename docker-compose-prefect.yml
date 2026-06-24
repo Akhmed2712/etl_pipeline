@@ -21,7 +21,7 @@ services:
     entrypoint: ["prefect", "server", "start"]
     environment:
       - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_UI_API_URL=http://12.12.1.155:4200/api
+      - PREFECT_UI_API_URL=http://127.0.0.1:4200/api
       # Koneksi ke database lokal (prefect-db)
       - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://admin:1234@prefect-db:5432/prefect_server_db
     ports:
@@ -37,6 +37,7 @@ services:
     build: .
     container_name: prefect-worker
     restart: always
+    working_dir: /opt/prefect
     entrypoint: ["prefect", "worker", "start", "--pool", "default-agent-pool"]
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
