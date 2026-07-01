@@ -5,6 +5,7 @@ import java.util.Properties
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.slf4j.LoggerFactory
+
 import etl_pipeline.Transformer
 import etl_pipeline.utils.CredentialsLoader
 
@@ -14,26 +15,34 @@ object FgFactMutuHasilLabKritis extends Transformer {
 
   def processData(
     spark: SparkSession,
-    env: Map[String, Any],
-    jdbcConfig: CredentialsLoader.JdbcConfig
+    env: Map[String, Any], // Berisi data map dari YAML script ini
+    jdbcConfig: CredentialsLoader.JdbcConfig // Ini write config bawaan runner utama
   ): DataFrame = {
+
+    // =====================================================
+    // 1. TRIGGER RUNNER LOOP & GENERATE PER-SOURCE LOGS
+    // =====================================================
+    // Baris ini memicu penjelajahan source dan mencetak detail JDBC ke terminal
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
 
     val dcLaboratorium = env("dc_laboratorium").asInstanceOf[Map[String, Any]]
     val documentHistoryList = env("document_history_list").asInstanceOf[Map[String, Any]]
 
-    val props = new Properties()
-    jdbcConfig.props.foreach { case (k, v) =>
-      props.setProperty(k, v)
-    }
+    // =====================================================
+    // 2. READ SOURCE LABORATORIUM (Config Spesifik)
+    // =====================================================
+    val confLab = readConfigs("dc_laboratorium")
+    val propsLab = new Properties()
+    confLab.props.foreach { case (k, v) => propsLab.setProperty(k, v) }
+    
+    val dbLab = dcLaboratorium.getOrElse("database", dcLaboratorium.getOrElse("schema", ""))
+    val tableNameLab = s"$dbLab.${dcLaboratorium("table")}"
 
-    // =========================
-    // LOAD LAB
-    // =========================
     val dfLab = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcLaboratorium("database")}.${dcLaboratorium("table")}",
-        props
+        confLab.url,
+        tableNameLab,
+        propsLab
       )
       .filter(dcLaboratorium("filter").toString)
       .select(
@@ -43,14 +52,21 @@ object FgFactMutuHasilLabKritis extends Transformer {
         col("waktu_hasil")
       )
 
-    // =========================
-    // LOAD DOC HISTORY
-    // =========================
+    // =====================================================
+    // 3. READ SOURCE DOCUMENT HISTORY (Config Spesifik)
+    // =====================================================
+    val confDoc = readConfigs("document_history_list")
+    val propsDoc = new Properties()
+    confDoc.props.foreach { case (k, v) => propsDoc.setProperty(k, v) }
+
+    val dbDoc = documentHistoryList.getOrElse("database", documentHistoryList.getOrElse("schema", ""))
+    val tableNameDoc = s"$dbDoc.${documentHistoryList("table")}"
+
     val dfDoc = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${documentHistoryList("database")}.${documentHistoryList("table")}",
-        props
+        confDoc.url,
+        tableNameDoc,
+        propsDoc
       )
       .filter(documentHistoryList("filter").toString)
       .select(
@@ -59,9 +75,9 @@ object FgFactMutuHasilLabKritis extends Transformer {
         col("urutan_lab")
       )
 
-    // =========================
-    // JOIN BASED ON ID
-    // =========================
+    // =====================================================
+    // 4. JOIN BASED ON ID (Membawa Optimasi Broadcast)
+    // =====================================================
     val dfJoin = dfLab
       .join(
         broadcast(dfDoc),
@@ -70,9 +86,9 @@ object FgFactMutuHasilLabKritis extends Transformer {
       )
       .withColumnRenamed("id", "lab_id")
 
-    // =========================
-    // HITUNG SELISIH WAKTU
-    // =========================
+    // =====================================================
+    // 5. HITUNG SELISIH WAKTU
+    // =====================================================
     val dfWithTime = dfJoin
       .withColumn("waktu_unggah", col("created_time"))
       .withColumn(
@@ -84,18 +100,18 @@ object FgFactMutuHasilLabKritis extends Transformer {
       )
       .withColumn("selisih_menit", col("selisih_menit").cast("long"))
 
-    // =========================
-    // STATUS LOGIC
-    // =========================
+    // =====================================================
+    // 6. STATUS LOGIC
+    // =====================================================
     val dfStatus = dfWithTime.withColumn(
       "status",
-        when(col("selisih_menit") <= 30, "Memenuhi")
-          .otherwise("Tidak Memenuhi")
+      when(col("selisih_menit") <= 30, "Memenuhi")
+        .otherwise("Tidak Memenuhi")
     )
 
-    // =========================
-    // DIMENSI WAKTU
-    // =========================
+    // =====================================================
+    // 7. DIMENSI WAKTU & SELEKSI AKHIR
+    // =====================================================
     val dfFinal = dfStatus
       .withColumn("tahun", year(col("waktu_konfirm")))
       .withColumn("triwulan", concat(lit("Q"), quarter(col("waktu_konfirm"))))

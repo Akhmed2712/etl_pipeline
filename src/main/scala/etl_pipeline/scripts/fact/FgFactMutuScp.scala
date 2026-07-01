@@ -19,27 +19,46 @@ object FgFactMutuScp extends Transformer {
       jdbcConfig: CredentialsLoader.JdbcConfig
   ): DataFrame = {
 
+    // =====================================================
+    // 1. TRIGGER RUNNER LOOP & GENERATE SOURCE LOGS
+    // =====================================================
+    // Mengisolasi kredensial read source dan memicu log debug di terminal
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
+
     val documentHistoryList =
       env("document_history_list").asInstanceOf[Map[String, Any]]
 
-    val props = new Properties()
-    jdbcConfig.props.foreach {
-      case (k, v) => props.setProperty(k, v)
+    // Ambil konfigurasi spesifik milik source document_history_list
+    val confDocHistory = readConfigs("document_history_list")
+    val sourceProps = new Properties()
+    confDocHistory.props.foreach {
+      case (k, v) => sourceProps.setProperty(k, v)
     }
 
+    // Resolusi nama schema/database secara dinamis
+    val dbName = documentHistoryList.getOrElse("database", documentHistoryList.getOrElse("schema", ""))
+    val tableName = s"$dbName.${documentHistoryList("table")}"
+
+    // =====================================================
+    // 2. READ (Menggunakan Config Spesifik Source)
+    // =====================================================
     val dfDocumentHistory = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${documentHistoryList("database")}.${documentHistoryList("table")}",
-        props
+        confDocHistory.url, // Menggunakan URL terisolasi dari YAML
+        tableName,
+        sourceProps // Menggunakan properti optimasi/tuning dari YAML
       )
       .filter(documentHistoryList("filter").toString)
       .select(
         col("document_history_id"),
+        col("document_code"), // Ditambahkan agar filter downstream tidak melempar AnalysisException
         col("title"),
         col("emr_data")
       )
 
+    // =====================================================
+    // 3. FILTER LAPORAN OPERASI
+    // =====================================================
     val dfLaporanOperasi = dfDocumentHistory
       .filter(
         col("document_code") === "RS52_RM4.10" &&
@@ -71,6 +90,9 @@ object FgFactMutuScp extends Transformer {
         ).as("dokter_bedah")
       )
 
+    // =====================================================
+    // 4. FILTER PRE OPERASI
+    // =====================================================
     val dfPreOperasi = dfDocumentHistory
       .filter(
         col("document_code") === "RM55_K"
@@ -99,6 +121,9 @@ object FgFactMutuScp extends Transformer {
         ).as("diagnosa")
       )
 
+    // =====================================================
+    // 5. JOIN & TRANSFORMASI LOGIKA
+    // =====================================================
     val dfFinal = dfLaporanOperasi
       .join(
         dfPreOperasi,

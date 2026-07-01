@@ -16,34 +16,32 @@ object FgFactMutuRawatJalan extends Transformer {
 
   def processData(
       spark: SparkSession,
-      env: Map[String, Any],
-      jdbcConfig: CredentialsLoader.JdbcConfig
+      env: Map[String, Any], // Berisi data map dari YAML script ini
+      jdbcConfig: CredentialsLoader.JdbcConfig // Ini write config bawaan runner utama
   ): DataFrame = {
 
-    val dcPendaftaran =
-      env("dc_pendaftaran").asInstanceOf[Map[String, Any]]
+    // =====================================================
+    // 1. TRIGGER RUNNER LOOP & GENERATE PER-SOURCE LOGS
+    // =====================================================
+    // Baris ini memicu penjelajahan source dan mencetak seluruh detail JDBC ke terminal
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
 
-    val dcLayananPendaftaran =
-      env("dc_layanan_pendaftaran").asInstanceOf[Map[String, Any]]
-
-    val dcSpesialisasi =
-      env("dc_spesialisasi").asInstanceOf[Map[String, Any]]
-
-    val dcTaskidBpjs =
-      env("dc_taskid_bpjs").asInstanceOf[Map[String, Any]]
-
-    val dcNakes =
-      env("dc_nakes").asInstanceOf[Map[String, Any]]
-
-    val dcPegawai =
-      env("dc_pegawai").asInstanceOf[Map[String, Any]]
-
-    val props = new Properties()
-
-    jdbcConfig.props.foreach {
-      case (k, v) => props.setProperty(k, v)
+    // Helper internal untuk mengekstrak java.util.Properties per source config
+    def getJdbcProps(config: CredentialsLoader.JdbcConfig): Properties = {
+      val props = new Properties()
+      config.props.foreach { case (k, v) => props.setProperty(k, v) }
+      props
     }
 
+    // Ekstrak data konfigurasi mentah dari YAML env
+    val dcPendaftaran = env("dc_pendaftaran").asInstanceOf[Map[String, Any]]
+    val dcLayananPendaftaran = env("dc_layanan_pendaftaran").asInstanceOf[Map[String, Any]]
+    val dcSpesialisasi = env("dc_spesialisasi").asInstanceOf[Map[String, Any]]
+    val dcTaskidBpjs = env("dc_taskid_bpjs").asInstanceOf[Map[String, Any]]
+    val dcNakes = env("dc_nakes").asInstanceOf[Map[String, Any]]
+    val dcPegawai = env("dc_pegawai").asInstanceOf[Map[String, Any]]
+
+    // Formula pembersihan No RM
     val noRmClean =
       lpad(
         substring(
@@ -55,11 +53,17 @@ object FgFactMutuRawatJalan extends Transformer {
         "0"
       )
 
+    // =====================================================
+    // 2. READ (Menggunakan Config Spesifik Tiap Source)
+    // =====================================================
+
+    val confPendaftaran = readConfigs("dc_pendaftaran")
+    val dbPendaftaran = dcPendaftaran.getOrElse("database", dcPendaftaran.getOrElse("schema", ""))
     val dfPendaftaran = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcPendaftaran("database")}.${dcPendaftaran("table")}",
-        props
+        confPendaftaran.url,
+        s"$dbPendaftaran.${dcPendaftaran("table")}",
+        getJdbcProps(confPendaftaran)
       )
       .filter(dcPendaftaran("filter").toString)
       .select(
@@ -72,11 +76,13 @@ object FgFactMutuRawatJalan extends Transformer {
         col("waktu_daftar")
       )
 
+    val confLayanan = readConfigs("dc_layanan_pendaftaran")
+    val dbLayanan = dcLayananPendaftaran.getOrElse("database", dcLayananPendaftaran.getOrElse("schema", ""))
     val dfLayanan = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcLayananPendaftaran("database")}.${dcLayananPendaftaran("table")}",
-        props
+        confLayanan.url,
+        s"$dbLayanan.${dcLayananPendaftaran("table")}",
+        getJdbcProps(confLayanan)
       )
       .filter(dcLayananPendaftaran("filter").toString)
       .select(
@@ -87,22 +93,26 @@ object FgFactMutuRawatJalan extends Transformer {
         col("waktu")
       )
 
+    val confSpesialisasi = readConfigs("dc_spesialisasi")
+    val dbSpesialisasi = dcSpesialisasi.getOrElse("database", dcSpesialisasi.getOrElse("schema", ""))
     val dfSpesialisasi = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcSpesialisasi("database")}.${dcSpesialisasi("table")}",
-        props
+        confSpesialisasi.url,
+        s"$dbSpesialisasi.${dcSpesialisasi("table")}",
+        getJdbcProps(confSpesialisasi)
       )
       .select(
         col("id").as("id_spesialisasi"),
         col("nama").as("spesialisasi")
       )
 
+    val confTaskid = readConfigs("dc_taskid_bpjs")
+    val dbTaskid = dcTaskidBpjs.getOrElse("database", dcTaskidBpjs.getOrElse("schema", ""))
     val dfTaskid = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcTaskidBpjs("database")}.${dcTaskidBpjs("table")}",
-        props
+        confTaskid.url,
+        s"$dbTaskid.${dcTaskidBpjs("table")}",
+        getJdbcProps(confTaskid)
       )
       .select(
         col("no_register"),
@@ -110,37 +120,42 @@ object FgFactMutuRawatJalan extends Transformer {
         col("waktu_rs")
       )
 
+    val confNakes = readConfigs("dc_nakes")
+    val dbNakes = dcNakes.getOrElse("database", dcNakes.getOrElse("schema", ""))
     val dfNakes = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcNakes("database")}.${dcNakes("table")}",
-        props
+        confNakes.url,
+        s"$dbNakes.${dcNakes("table")}",
+        getJdbcProps(confNakes)
       )
       .select(
         col("id"),
         col("id_pegawai")
       )
 
+    val confPegawai = readConfigs("dc_pegawai")
+    val dbPegawai = dcPegawai.getOrElse("database", dcPegawai.getOrElse("schema", ""))
     val dfPegawai = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcPegawai("database")}.${dcPegawai("table")}",
-        props
+        confPegawai.url,
+        s"$dbPegawai.${dcPegawai("table")}",
+        getJdbcProps(confPegawai)
       )
       .select(
         col("id").as("pegawai_id"),
         col("nama").as("nama_dokter")
       )
 
+    // =====================================================
+    // TRANSFORMATION & LOGIC (WINDOW, FILTER, JOIN)
+    // =====================================================
+
     val windowLayanan = Window
       .partitionBy("id_pendaftaran")
       .orderBy(col("waktu").asc)
 
     val dfLayananPertama = dfLayanan
-      .withColumn(
-        "rn",
-        row_number().over(windowLayanan)
-      )
+      .withColumn("rn", row_number().over(windowLayanan))
       .filter(col("rn") === 1)
       .drop("rn")
 
@@ -159,68 +174,32 @@ object FgFactMutuRawatJalan extends Transformer {
       )
 
     val dfJoined = dfPendaftaran
-      .join(
-        dfLayananPertama,
-        dfPendaftaran("dp_id") === dfLayananPertama("id_pendaftaran"),
-        "inner"
-      )
-      .join(
-        dfSpesialisasi,
-        dfLayananPertama("id_unit_layanan") === dfSpesialisasi("id_spesialisasi"),
-        "left"
-      )
-      .join(
-        dfNakes,
-        dfLayananPertama("id_dokter") === dfNakes("id"),
-        "left"
-      )
-      .join(
-        dfPegawai,
-        dfNakes("id_pegawai") === dfPegawai("pegawai_id"),
-        "left"
-      )
-      .join(
-        dfTask3,
-        dfPendaftaran("no_register") === dfTask3("no_register_t3"),
-        "inner"
-      )
-      .join(
-        dfTask4,
-        dfPendaftaran("no_register") === dfTask4("no_register_t4"),
-        "inner"
-      )
+      .join(dfLayananPertama, dfPendaftaran("dp_id") === dfLayananPertama("id_pendaftaran"), "inner")
+      .join(dfSpesialisasi, dfLayananPertama("id_unit_layanan") === dfSpesialisasi("id_spesialisasi"), "left")
+      .join(dfNakes, dfLayananPertama("id_dokter") === dfNakes("id"), "left")
+      .join(dfPegawai, dfNakes("id_pegawai") === dfPegawai("pegawai_id"), "left")
+      .join(dfTask3, dfPendaftaran("no_register") === dfTask3("no_register_t3"), "inner")
+      .join(dfTask4, dfPendaftaran("no_register") === dfTask4("no_register_t4"), "inner")
 
-    val selisihMenit =
-      (
-        unix_timestamp(col("waktu_task_4")) -
-          unix_timestamp(col("waktu_task_3"))
-      ) / 60
-
-    val baseDate =
-      to_date(col("waktu_task_3"))
+    val selisihMenit = (unix_timestamp(col("waktu_task_4")) - unix_timestamp(col("waktu_task_3"))) / 60
+    val baseDate = to_date(col("waktu_task_3"))
 
     val dfFinal = dfJoined
-      .withColumn(
-        "selisih_menit",
-        selisihMenit.cast("long")
-      )
+      .withColumn("selisih_menit", selisihMenit.cast("long"))
       .withColumn(
         "status",
         when(
-            lower(col("spesialisasi")) === "gigi" ||
-              lower(col("jenis")) === "mcu" ||
-              lower(col("spesialisasi")).contains("mcu"),
-            "Eksklusi"
-          )
+          lower(col("spesialisasi")) === "gigi" ||
+            lower(col("jenis")) === "mcu" ||
+            lower(col("spesialisasi")).contains("mcu"),
+          "Eksklusi"
+        )
           .when(col("selisih_menit") <= 60, "Memenuhi")
           .otherwise("Tidak Memenuhi")
       )
       .withColumn("partition_date", baseDate)
       .withColumn("tahun", year(baseDate))
-      .withColumn(
-        "triwulan",
-        concat(lit("Q"), quarter(baseDate))
-      )
+      .withColumn("triwulan", concat(lit("Q"), quarter(baseDate)))
       .withColumn(
         "nama_bulan",
         when(month(baseDate) === 1, "01-Januari")

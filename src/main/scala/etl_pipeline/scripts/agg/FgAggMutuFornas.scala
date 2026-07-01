@@ -12,10 +12,24 @@ object FgAggMutuFornas extends Transformer {
 
   def processData(
       spark: SparkSession,
-      env: Map[String, Any],
-      jdbcConfig: CredentialsLoader.JdbcConfig
+      env: Map[String, Any], // 'env' di sini berisi map data dari yaml fg_agg_mutu_fornas
+      jdbcConfig: CredentialsLoader.JdbcConfig // Ini write config bawaan runner utama
   ): DataFrame = {
 
+    // =====================================================
+    // 1. TRIGGER RUNNER LOOP & GENERATE PER-SOURCE LOGS
+    // =====================================================
+    // Baris ini akan otomatis memicu print "found 8 sources" beserta detail lognya
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
+
+    // Helper internal untuk mengonversi properti Map ke java.util.Properties per tabel
+    def getJdbcProps(config: CredentialsLoader.JdbcConfig): java.util.Properties = {
+      val props = new java.util.Properties()
+      config.props.foreach { case (k, v) => props.setProperty(k, v) }
+      props
+    }
+
+    // Ekstrak data konfigurasi mentah dari YAML env
     val dcPenjualan = env("dc_penjualan").asInstanceOf[Map[String, Any]]
     val dcDetailPenjualan = env("dc_detail_penjualan").asInstanceOf[Map[String, Any]]
     val fgDimPengemasanBarang = env("fg_dim_pengemasan_barang").asInstanceOf[Map[String, Any]]
@@ -25,73 +39,76 @@ object FgAggMutuFornas extends Transformer {
     val dcPendaftaran = env("dc_pendaftaran").asInstanceOf[Map[String, Any]]
     val dcSpesialisasi = env("dc_spesialisasi").asInstanceOf[Map[String, Any]]
 
-    val props = new java.util.Properties()
-    jdbcConfig.props.foreach { case (k, v) =>
-      props.setProperty(k, v)
-    }
-
     // =====================================================
-    // READ
+    // 2. READ (Menggunakan Config Spesifik Tiap Source)
     // =====================================================
 
+    val confPenjualan = readConfigs("dc_penjualan")
     val dfPenjualan = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcPenjualan("database")}.${dcPenjualan("table")}",
-        props
+        confPenjualan.url,
+        s"${dcPenjualan.getOrElse("database", dcPenjualan.getOrElse("schema", ""))}.${dcPenjualan("table")}",
+        getJdbcProps(confPenjualan)
       )
       .filter(dcPenjualan("filter").toString)
 
+    val confDetailPenjualan = readConfigs("dc_detail_penjualan")
     val dfDetailPenjualan = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcDetailPenjualan("database")}.${dcDetailPenjualan("table")}",
-        props
+        confDetailPenjualan.url,
+        s"${dcDetailPenjualan.getOrElse("database", dcDetailPenjualan.getOrElse("schema", ""))}.${dcDetailPenjualan("table")}",
+        getJdbcProps(confDetailPenjualan)
       )
       .filter(dcDetailPenjualan("filter").toString)
 
+    val confBarang = readConfigs("fg_dim_pengemasan_barang")
     val dfBarang = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${fgDimPengemasanBarang("database")}.${fgDimPengemasanBarang("table")}",
-        props
+        confBarang.url,
+        s"${fgDimPengemasanBarang.getOrElse("database", fgDimPengemasanBarang.getOrElse("schema", ""))}.${fgDimPengemasanBarang("table")}",
+        getJdbcProps(confBarang)
       )
       .filter(col("kategori") === "Obat")
 
+    val confUsers = readConfigs("dc_users")
     val dfUsers = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcUsers("database")}.${dcUsers("table")}",
-        props
+        confUsers.url,
+        s"${dcUsers.getOrElse("database", dcUsers.getOrElse("schema", ""))}.${dcUsers("table")}",
+        getJdbcProps(confUsers)
       )
 
+    val confGroupUsers = readConfigs("dc_group_users")
     val dfGroupUsers = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcGroupUsers("database")}.${dcGroupUsers("table")}",
-        props
+        confGroupUsers.url,
+        s"${dcGroupUsers.getOrElse("database", dcGroupUsers.getOrElse("schema", ""))}.${dcGroupUsers("table")}",
+        getJdbcProps(confGroupUsers)
       )
 
+    val confLayanan = readConfigs("dc_layanan_pendaftaran")
     val dfLayanan = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcLayananPendaftaran("database")}.${dcLayananPendaftaran("table")}",
-        props
+        confLayanan.url,
+        s"${dcLayananPendaftaran.getOrElse("database", dcLayananPendaftaran.getOrElse("schema", ""))}.${dcLayananPendaftaran("table")}",
+        getJdbcProps(confLayanan)
       )
 
+    val confPendaftaran = readConfigs("dc_pendaftaran")
     val dfPendaftaran = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcPendaftaran("database")}.${dcPendaftaran("table")}",
-        props
+        confPendaftaran.url,
+        s"${dcPendaftaran.getOrElse("database", dcPendaftaran.getOrElse("schema", ""))}.${dcPendaftaran("table")}",
+        getJdbcProps(confPendaftaran)
       )
       .filter(dcPendaftaran("filter").toString)
 
+    val confSpesialisasi = readConfigs("dc_spesialisasi")
     val dfSpesialisasi = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${dcSpesialisasi("database")}.${dcSpesialisasi("table")}",
-        props
+        confSpesialisasi.url,
+        s"${dcSpesialisasi.getOrElse("database", dcSpesialisasi.getOrElse("schema", ""))}.${dcSpesialisasi("table")}",
+        getJdbcProps(confSpesialisasi)
       )
 
     // =====================================================
@@ -156,32 +173,10 @@ object FgAggMutuFornas extends Transformer {
         col("jenis_layanan")
       )
       .agg(
-
-        count(lit(1))
-          .alias("total_item"),
-
-        sum(
-          when(
-            lower(trim(col("fdpb.fornas"))) === "ya",
-            1
-          ).otherwise(0)
-        ).alias("total_fornas"),
-
-        sum(
-          when(
-            lower(trim(col("fdpb.fornas"))) =!= "ya" &&
-            col("fdpb.fornas").isNotNull,
-            1
-          ).otherwise(0)
-        ).alias("total_non_fornas"),
-
-        sum(
-          when(
-            col("fdpb.fornas").isNull,
-            1
-          ).otherwise(0)
-        ).alias("total_null_fornas"),
-
+        count(lit(1)).alias("total_item"),
+        sum(when(lower(trim(col("fdpb.fornas"))) === "ya", 1).otherwise(0)).alias("total_fornas"),
+        sum(when(lower(trim(col("fdpb.fornas"))) =!= "ya" && col("fdpb.fornas").isNotNull, 1).otherwise(0)).alias("total_non_fornas"),
+        sum(when(col("fdpb.fornas").isNull, 1).otherwise(0)).alias("total_null_fornas"),
         max(
           when(
             lower(coalesce(col("dgu.nama"), lit(""))).contains("komite") ||
@@ -189,78 +184,27 @@ object FgAggMutuFornas extends Transformer {
             1
           ).otherwise(0)
         ).alias("is_eksklusi"),
-
-        max(col("dgu.nama"))
-          .alias("nama_group_user"),
-
-        // GROUP_CONCAT formularium = 'tidak'
-        concat_ws(
-          ", ",
-          sort_array(
-            collect_set(
-              when(
-                lower(trim(col("fdpb.fornas"))) === "tidak",
-                col("fdpb.nama_barang")
-              )
-            )
-          )
-        ).alias("nama_obat_diluar_fornas"),
-
-        // GROUP_CONCAT formularium IS NULL
-        concat_ws(
-          ", ",
-          sort_array(
-            collect_set(
-              when(
-                col("fdpb.fornas").isNull,
-                col("fdpb.nama_barang")
-              )
-            )
-          )
-        ).alias("nama_obat_fornas_null")
+        max(col("dgu.nama")).alias("nama_group_user"),
+        concat_ws(", ", sort_array(collect_set(when(lower(trim(col("fdpb.fornas"))) === "tidak", col("fdpb.nama_barang"))))).alias("nama_obat_diluar_fornas"),
+        concat_ws(", ", sort_array(collect_set(when(col("fdpb.fornas").isNull, col("fdpb.nama_barang"))))).alias("nama_obat_fornas_null")
       )
-      .withColumn(
-        "persen_fornas",
-        round(
-          col("total_fornas") * lit(100.0) /
-            col("total_item"),
-          2
-        )
-      )
+      .withColumn("persen_fornas", round(col("total_fornas") * lit(100.0) / col("total_item"), 2))
       .withColumn(
         "status",
-        when(
-          col("is_eksklusi") === 1,
-          "Eksklusi"
-        )
-          .when(
-            col("total_null_fornas") > 0,
-            "Tidak Ada Keterangan FORNAS"
-          )
-          .when(
-            col("persen_fornas") >= 80,
-            "Memenuhi"
-          )
+        when(col("is_eksklusi") === 1, "Eksklusi")
+          .when(col("total_null_fornas") > 0, "Tidak Ada Keterangan FORNAS")
+          .when(col("persen_fornas") >= 80, "Memenuhi")
           .otherwise("Tidak Memenuhi")
       )
       .withColumn(
         "keterangan",
-        when(
-          col("is_eksklusi") === 1,
-          concat(
-            lit("Eksklusi Disetujui "),
-            col("nama_group_user")
-          )
-        )
-          .when(
-            col("total_null_fornas") > 0,
-            lit("Belum ada keterangan FORNAS pada master obat")
-          )
+        when(col("is_eksklusi") === 1, concat(lit("Eksklusi Disetujui "), col("nama_group_user")))
+          .when(col("total_null_fornas") > 0, lit("Belum ada keterangan FORNAS pada master obat"))
           .otherwise(lit(null))
       )
 
     // =====================================================
-    // GENERATE DIMENSI WAKTU (Substitusi dfWaktu Join)
+    // GENERATE DIMENSI WAKTU
     // =====================================================
     val dfWithTime = dfAgg
       .withColumn("tahun", year(col("waktu")))
@@ -286,10 +230,7 @@ object FgAggMutuFornas extends Transformer {
     // =====================================================
 
     val dfResult = dfWithTime
-      .withColumn(
-        "partition_date",
-        to_date(col("tanggal_penjualan"))
-      )
+      .withColumn("partition_date", coalesce(to_date(col("tanggal_penjualan")), to_date(col("waktu"))))
       .select(
         col("id"),
         col("tanggal_penjualan"),
@@ -301,19 +242,8 @@ object FgAggMutuFornas extends Transformer {
         col("persen_fornas"),
         col("status"),
         col("keterangan"),
-
-        when(
-          trim(col("nama_obat_diluar_fornas")) === "",
-          lit(null)
-        ).otherwise(col("nama_obat_diluar_fornas"))
-          .alias("nama_obat_diluar_fornas"),
-
-        when(
-          trim(col("nama_obat_fornas_null")) === "",
-          lit(null)
-        ).otherwise(col("nama_obat_fornas_null"))
-          .alias("nama_obat_fornas_null"),
-
+        when(trim(col("nama_obat_diluar_fornas")) === "", lit(null)).otherwise(col("nama_obat_diluar_fornas")).alias("nama_obat_diluar_fornas"),
+        when(trim(col("nama_obat_fornas_null")) === "", lit(null)).otherwise(col("nama_obat_fornas_null")).alias("nama_obat_fornas_null"),
         col("tahun"),
         col("triwulan"),
         col("nama_bulan"),

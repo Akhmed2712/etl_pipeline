@@ -16,43 +16,47 @@ object FgStagingDocumentHistoryList extends Transformer {
 
   def processData(
     spark: SparkSession,
-    env: Map[String, Any],
-    jdbcConfig: CredentialsLoader.JdbcConfig
+    env: Map[String, Any], // Berisi data map dari YAML script ini
+    jdbcConfig: CredentialsLoader.JdbcConfig // Ini write config bawaan runner utama
   ): DataFrame = {
 
     // =========================================================================
-    // 1. Source Config dari read_conf
+    // 1. TRIGGER RUNNER LOOP & GENERATE PER-SOURCE LOGS
     // =========================================================================
+    // Baris ini memicu penjelajahan source dan mencetak detail JDBC ke terminal
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
 
-    val docHistoryConf =
-      env("document_history_list")
-        .asInstanceOf[Map[String, Any]]
+    val docHistoryConf = env("document_history_list").asInstanceOf[Map[String, Any]]
 
-    val props = new Properties()
-    jdbcConfig.props.foreach {
-      case (k, v) => props.setProperty(k, v)
+    // Ambil properti JDBC spesifik untuk source document_history_list
+    val confDocHistory = readConfigs("document_history_list")
+    val sourceProps = new Properties()
+    confDocHistory.props.foreach { case (k, v) =>
+      sourceProps.setProperty(k, v)
     }
 
-    // =========================================================================
-    // 2. Read dari Postgres
-    // =========================================================================
+    // Resolusi nama database/schema secara dinamis
+    val dbName = docHistoryConf.getOrElse("database", docHistoryConf.getOrElse("schema", ""))
+    val tableName = s"$dbName.${docHistoryConf("table")}"
 
+    // =========================================================================
+    // 2. Read dari Postgres (Menggunakan Config Spesifik Source)
+    // =========================================================================
     val dfDocHistory = spark.read
       .jdbc(
-        jdbcConfig.url,
-        s"${docHistoryConf("database")}.${docHistoryConf("table")}",
-        props
+        confDocHistory.url, // Menggunakan URL hasil loader per source
+        tableName,
+        sourceProps // Menggunakan tuning props milik source
       )
       .filter(docHistoryConf("filter").toString)
       .select(
-        col("document_history_list_id").as("id"),
+        col("document_history_list_id"), // Fixed: dibiarkan utuh agar sinkron dengan withColumnRenamed di bawah
         col("created_time")
       )
 
     // =========================================================================
     // 3. Transform
     // =========================================================================
-
     val baseDate = to_date(col("created_time"))
 
     val windowLab = Window
@@ -65,10 +69,8 @@ object FgStagingDocumentHistoryList extends Transformer {
     val dfFinal = dfDocHistoryRanked
       .withColumnRenamed("document_history_list_id", "id")
       .withColumn("partition_date", baseDate)
-      .withColumn("tahun",
-          year(baseDate))
-      .withColumn("triwulan",
-          concat(lit("Q"), quarter(baseDate)))
+      .withColumn("tahun", year(baseDate))
+      .withColumn("triwulan", concat(lit("Q"), quarter(baseDate)))
       .withColumn("nama_bulan",
           when(month(baseDate) === 1,  "Januari")
           .when(month(baseDate) === 2,  "Februari")

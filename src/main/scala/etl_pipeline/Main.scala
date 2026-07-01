@@ -35,7 +35,12 @@ object Main {
   ): Unit = {
     val writeConf = catalogConf("write_conf").asInstanceOf[Map[String, Any]]
     val options = writeConf.get("options").map(_.asInstanceOf[Map[String, Any]]).getOrElse(Map.empty[String, Any])
-    val schema = catalogConf.getOrElse("schema", "").toString
+    val schema =
+  catalogConf
+    .get("write_database")
+    .orElse(catalogConf.get("schema"))
+    .getOrElse("")
+    .toString
     val table = catalogConf("table").toString
     val fullTable = if (schema.nonEmpty) s"`$schema`.`$table`" else s"`$table`"
     val mode = writeConf.getOrElse("mode", "overwrite").toString
@@ -166,9 +171,21 @@ object Main {
           conn.createStatement().executeUpdate(deleteSql)
         }
       } else if (mode == "overwrite" && !catalogHasPartitionDate) {
-        log.info(s"Mode overwrite tanpa partisi: Truncating $fullTable")
-        conn.createStatement().executeUpdate(s"TRUNCATE TABLE $fullTable")
-      }
+
+      log.info(
+        s"""
+          |========== TRUNCATE TABLE ==========
+          |URL      : ${jdbcConfig.url}
+          |Schema   : $schema
+          |Table    : $table
+          |FullName : $fullTable
+          |SQL      : TRUNCATE TABLE $fullTable
+          |====================================
+          |""".stripMargin
+      )
+
+      conn.createStatement().executeUpdate(s"TRUNCATE TABLE $fullTable")
+    }
     } finally {
       conn.close()
     }

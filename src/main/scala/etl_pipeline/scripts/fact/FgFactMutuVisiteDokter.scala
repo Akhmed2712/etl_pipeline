@@ -16,30 +16,38 @@ object FgFactMutuVisiteDokter extends Transformer {
 
   def processData(
       spark: SparkSession,
-      env: Map[String, Any],
-      jdbcConfig: CredentialsLoader.JdbcConfig
+      env: Map[String, Any], // Berisi data map dari YAML script ini
+      jdbcConfig: CredentialsLoader.JdbcConfig // Ini write config bawaan runner utama
   ): DataFrame = {
 
-    val documentHistoryList =
-      env("document_history_list")
-        .asInstanceOf[Map[String, Any]]
+    // =====================================================
+    // 1. TRIGGER RUNNER LOOP & GENERATE SOURCE LOGS
+    // =====================================================
+    // Baris ini memicu log "found X sources" dan mencetak detail JDBC source ke terminal
+    val readConfigs = CredentialsLoader.loadAllReadSources(env)
 
-    val props = new Properties()
+    val documentHistoryList = env("document_history_list").asInstanceOf[Map[String, Any]]
 
-    jdbcConfig.props.foreach {
-      case (k, v) =>
-        props.setProperty(k, v)
+    // Ambil properti JDBC spesifik untuk source document_history_list
+    val confDocHistory = readConfigs("document_history_list")
+    val sourceProps = new Properties()
+    confDocHistory.props.foreach { case (k, v) =>
+      sourceProps.setProperty(k, v)
     }
 
-    val tableName =
-      s"${documentHistoryList("database")}.${documentHistoryList("table")}"
+    // Resolusi nama database/schema secara dinamis
+    val dbName = documentHistoryList.getOrElse("database", documentHistoryList.getOrElse("schema", ""))
+    val tableName = s"$dbName.${documentHistoryList("table")}"
 
+    // =====================================================
+    // READ (Menggunakan Config Spesifik Source, Bukan Global)
+    // =====================================================
     val dfSource =
       spark.read
         .jdbc(
-          jdbcConfig.url,
+          confDocHistory.url, // Menggunakan URL hasil loader per source
           tableName,
-          props
+          sourceProps // Menggunakan tuning props milik source
         )
         .select(
           col("document_history_list_id"),

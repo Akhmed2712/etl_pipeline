@@ -1,29 +1,31 @@
-_mysql_conf_prod: &mysql_conf_prod
+_mysql_conf_base: &mysql_conf_base
   layer: mysql
   env: prod
   credentials_key: mysqlprod    # matches key in credentials/credentials.yml
+
+_mysql_conf_prod: &mysql_conf_prod
+  <<: *mysql_conf_base
   database: simrs_ums
 
+_mysql_conf_mart: &mysql_conf_mart
+  <<: *mysql_conf_base
+  database: simrs_ums_mart
+
 _mysql_conf_prod_tune: &mysql_conf_prod_tune
-  layer: mysql
-  env: prod
-  credentials_key: mysqlprod    # matches key in credentials/credentials.yml
-  database: simrs_ums
+  <<: *mysql_conf_prod
   partitionColumn: "id"
   lowerBound: "1"
-  upperBound: "10000000"
-  numPartitions: 20
+  upperBound: "1000"
+  numPartitions: 1
 
 _postgres_conf_prod: &postgres_conf_prod
   layer: postgres
   env: prod
   credentials_key: postgresprod    # matches key in credentials/credentials.yml
-  database: e_doc_ums 
+  database: e_doc_ums
 
 fg_fact_mutu_identifikasi_pasien:
-  <<: *postgres_conf_prod
-  write_credentials_key: mysqlprod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_identifikasi_pasien
   schema: simrs_ums_mart
   script_type: scala
@@ -31,8 +33,8 @@ fg_fact_mutu_identifikasi_pasien:
 
   read_conf:
     document_history_list:
-      database: e_doc_ums.public
-      table: document_history_list
+      <<: *postgres_conf_prod
+      table: public.document_history_list
       filter: > 
         (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') 
         and document_code = 'RM102'
@@ -71,9 +73,7 @@ fg_fact_mutu_identifikasi_pasien:
         index: true
 
 fg_fact_mutu_scp:
-  <<: *postgres_conf_prod
-  write_credentials_key: mysqlprod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_scp
   schema: simrs_ums_mart
   script_type: scala
@@ -81,8 +81,8 @@ fg_fact_mutu_scp:
 
   read_conf:
     document_history_list:
-      database: e_doc_ums.public
-      table: document_history_list
+      <<: *postgres_conf_prod
+      table: public.document_history_list
       filter: >
         (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') 
         and title IN (
@@ -129,7 +129,7 @@ fg_fact_mutu_scp:
         index: true
 
 fg_fact_mutu_rawat_jalan:
-  <<: *mysql_conf_prod
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_rawat_jalan
   schema: simrs_ums_mart
   script_type: scala
@@ -137,30 +137,30 @@ fg_fact_mutu_rawat_jalan:
 
   read_conf:
     dc_pendaftaran:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_pendaftaran
       filter: >
         substring(waktu_daftar,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_daftar,1,10) < '{~~~%Y-%m-%d:day=0~~~}' 
         and lower(rawat) = 'jalan' 
         and status not in ('Batal','Booking')
     dc_layanan_pendaftaran:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_layanan_pendaftaran
       filter: >
         substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
         and status not in ('Batal','Belum')
     dc_spesialisasi:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_spesialisasi
     dc_taskid_bpjs:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_taskid_bpjs
       filter: substring(waktu_rs,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_rs,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
     dc_nakes:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_nakes
     dc_pegawai:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_pegawai
 
   write_conf:
@@ -201,9 +201,7 @@ fg_fact_mutu_rawat_jalan:
       numPartitions: 20
 
 fg_fact_mutu_visite_dokter:
-  <<: *postgres_conf_prod
-  write_credentials_key: mysqlprod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_visite_dokter
   schema: simrs_ums_mart
   script_type: scala
@@ -211,8 +209,8 @@ fg_fact_mutu_visite_dokter:
 
   read_conf:
     document_history_list:
-      database: e_doc_ums.public
-      table: document_history_list
+      <<: *postgres_conf_prod
+      table: public.document_history_list
       filter: >
         (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and 
         document_code = 'CPPT1' and
@@ -255,9 +253,7 @@ fg_fact_mutu_visite_dokter:
         index: true
 
 fg_staging_document_history_list:
-  <<: *postgres_conf_prod
-  write_credentials_key: mysqlprod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
   table: fg_staging_document_history_list
   schema: simrs_ums_mart
   script_type: scala
@@ -265,8 +261,8 @@ fg_staging_document_history_list:
 
   read_conf:
     document_history_list:
-      database: e_doc_ums.public
-      table: document_history_list
+      <<: *postgres_conf_prod
+      table: public.document_history_list
       filter: > 
         (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and
         title like '%Lab%' and document_code = 'UP'
@@ -294,7 +290,7 @@ fg_staging_document_history_list:
         index: true
 
 fg_fact_mutu_hasil_lab_kritis:
-  <<: *mysql_conf_prod
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_hasil_lab_kritis
   schema: simrs_ums_mart
   script_type: scala
@@ -302,12 +298,12 @@ fg_fact_mutu_hasil_lab_kritis:
 
   read_conf:
     document_history_list:
-      database: simrs_ums_mart
+      <<: *mysql_conf_mart
       table: fg_staging_document_history_list
       filter: >
         substring(created_time,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
     dc_laboratorium:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_laboratorium
       filter: >
         substring(waktu_hasil,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_hasil,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
@@ -343,7 +339,7 @@ fg_fact_mutu_hasil_lab_kritis:
         index: true
 
 fg_dim_pengemasan_barang:
-  <<: *mysql_conf_prod
+  <<: *mysql_conf_mart
   table: fg_dim_pengemasan_barang
   schema: simrs_ums_mart
   script_type: scala
@@ -351,25 +347,25 @@ fg_dim_pengemasan_barang:
 
   read_conf:
     dc_barang:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_barang
     dc_kemasan_barang:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_kemasan_barang
     dc_sediaan:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_sediaan
     dc_golongan:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_golongan
     dc_kategori_barang:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_kategori_barang
     dc_barang_paket:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_barang_paket
     dc_satuan:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_satuan
 
   write_conf:
@@ -419,7 +415,7 @@ fg_dim_pengemasan_barang:
       numPartitions: 5
 
 fg_agg_mutu_fornas:
-  <<: *mysql_conf_prod_tune
+  <<: *mysql_conf_mart
   table: fg_agg_mutu_fornas
   schema: simrs_ums_mart
   script_type: scala
@@ -427,35 +423,32 @@ fg_agg_mutu_fornas:
 
   read_conf:
     dc_penjualan:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_penjualan
       filter: substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
     dc_detail_penjualan:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_detail_penjualan
       filter: substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
     dc_users:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_users
     dc_group_users:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_group_users
     dc_layanan_pendaftaran:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_layanan_pendaftaran
     dc_pendaftaran:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_pendaftaran
       filter: substring(waktu_daftar,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_daftar,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
     dc_spesialisasi:
-      database: simrs_ums
+      <<: *mysql_conf_prod
       table: dc_spesialisasi
     fg_dim_pengemasan_barang:
-      database: simrs_ums_mart
+      <<: *mysql_conf_mart
       table: fg_dim_pengemasan_barang
-    fg_dim_waktu:
-      database: simrs_ums_mart
-      table: fg_dim_waktu
 
   write_conf:
     mode: overwrite
@@ -503,9 +496,7 @@ fg_agg_mutu_fornas:
       numPartitions: 20
 
 fg_fact_mutu_pasien_jatuh:
-  <<: *postgres_conf_prod
-  write_credentials_key: mysqlprod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
   table: fg_fact_mutu_pasien_jatuh
   schema: simrs_ums_mart
   script_type: scala
@@ -513,8 +504,8 @@ fg_fact_mutu_pasien_jatuh:
 
   read_conf:
     document_history_list:
-      database: e_doc_ums.public
-      table: document_history_list
+      <<: *postgres_conf_prod
+      table: public.document_history_list
       filter: >
         (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and
         document_code IN (
