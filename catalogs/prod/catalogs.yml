@@ -11,13 +11,6 @@ _mysql_conf_mart: &mysql_conf_mart
   <<: *mysql_conf_base
   database: simrs_ums_mart
 
-_mysql_conf_prod_tune: &mysql_conf_prod_tune
-  <<: *mysql_conf_prod
-  partitionColumn: "id"
-  lowerBound: "1"
-  upperBound: "1000"
-  numPartitions: 1
-
 _postgres_conf_prod: &postgres_conf_prod
   layer: postgres
   env: prod
@@ -339,7 +332,8 @@ fg_fact_mutu_hasil_lab_kritis:
         index: true
 
 fg_dim_pengemasan_barang:
-  <<: *mysql_conf_mart
+  <<: *mysql_conf_prod
+  write_database: simrs_ums_mart
   table: fg_dim_pengemasan_barang
   schema: simrs_ums_mart
   script_type: scala
