@@ -6,7 +6,7 @@ RESOURCE=${3:-"my_orders_job"}
 START_DATE=${4:-"$(date +%Y-%m-%d)"}
 BASE_DIR=/home/bai/farmagitechs/etl_project/etl-pipeline
 
-echo "▶ Running pipeline: $CATALOG | date=$START_DATE"
+echo "Running pipeline: $CATALOG | date=$START_DATE"
 docker run --rm \
   --network analytics_bridge \
   -v "$BASE_DIR/target/scala-2.13/:/app/" \
@@ -31,7 +31,7 @@ docker run --rm \
 
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
-  echo "❌ Failed: $CATALOG | date=$START_DATE (code=$EXIT_CODE)"
+  echo "Failed: $CATALOG | date=$START_DATE (code=$EXIT_CODE)"
   exit $EXIT_CODE
 fi
-echo "✅ Done: $CATALOG | date=$START_DATE"
+echo "Done: $CATALOG | date=$START_DATE"

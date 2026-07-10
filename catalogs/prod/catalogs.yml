@@ -5,16 +5,16 @@ _mysql_conf_base: &mysql_conf_base
 
 _mysql_conf_prod: &mysql_conf_prod
   <<: *mysql_conf_base
-  database: simrs_rsia_abby
+  database: simrs_rsatturots
 
 _mysql_conf_mart: &mysql_conf_mart
   <<: *mysql_conf_base
-  database: mart_rsia_abby
+  database: mart_rsatturots
 
 fg_fact_penjualan_barang:
   <<: *mysql_conf_mart
   table: fg_fact_penjualan_barang
-  schema: mart_rsia_abby
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactPenjualanBarang
   partitionColumn: "id"
@@ -110,6 +110,8 @@ fg_fact_penjualan_barang:
         type: decimal(16,2)
       - column_name: harga_jual
         type: decimal(16,2)
+      - column_name: total_pembulatan
+        type: decimal(16,2)
       - column_name: partition_date
         type: date
         index: true  
@@ -120,7 +122,7 @@ fg_fact_penjualan_barang:
 fg_fact_retur_barang:
   <<: *mysql_conf_mart
   table: fg_fact_retur_barang
-  schema: mart_rsia_abby
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactReturBarang
 
@@ -166,9 +168,9 @@ fg_fact_retur_barang:
 
 fg_dim_pengemasan_barang:
   <<: *mysql_conf_mart
-  write_database: mart_rsia_abby
+  write_database: mart_rsatturots
   table: fg_dim_pengemasan_barang
-  schema: mart_rsia_abby
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.dimension.FgDimPengemasanBarang
 
@@ -249,9 +251,9 @@ fg_dim_pengemasan_barang:
 
 fg_dim_nakes:
   <<: *mysql_conf_mart
-  write_database: mart_rsia_abby
+  write_database: mart_rsatturots
   table: fg_dim_nakes
-  schema: simrs_rsia_abby
+  schema: simrs_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.dimension.FgDimNakes
 
@@ -291,7 +293,7 @@ fg_dim_nakes:
 fg_agg_rekap_penggunaan_barang:
   <<: *mysql_conf_mart
   table: fg_agg_rekap_penggunaan_barang
-  schema: mart_rsia_abby
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.agg.FgAggRekapPenggunaanBarang
   partitionColumn: "id"
@@ -370,6 +372,8 @@ fg_agg_rekap_penggunaan_barang:
         type: decimal(16,2)
       - column_name: subtotal_harga_jual
         type: decimal(16,2)
+      - column_name: total_pembulatan
+        type: decimal(16,2)
       - column_name: tahun
         type: smallint
       - column_name: triwulan
@@ -409,7 +413,7 @@ fg_agg_rekap_penggunaan_barang:
 fg_fact_pergerakan_stok:
   <<: *mysql_conf_mart
   table: fg_fact_pergerakan_stok
-  schema: mart_rsia_abby
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.fact.FgFactPergerakanStok
 
