@@ -5,337 +5,170 @@ _mysql_conf_base: &mysql_conf_base
 
 _mysql_conf_prod: &mysql_conf_prod
   <<: *mysql_conf_base
-  database: simrs_ums
+  database: simrs_rsia_abby
 
 _mysql_conf_mart: &mysql_conf_mart
   <<: *mysql_conf_base
-  database: simrs_ums_mart
+  database: mart_rsia_abby
 
-_postgres_conf_prod: &postgres_conf_prod
-  layer: postgres
-  env: prod
-  credentials_key: postgresprod    # matches key in credentials/credentials.yml
-  database: e_doc_ums
-
-fg_fact_mutu_identifikasi_pasien:
+fg_fact_penjualan_barang:
   <<: *mysql_conf_mart
-  table: fg_fact_mutu_identifikasi_pasien
-  schema: simrs_ums_mart
+  table: fg_fact_penjualan_barang
+  schema: mart_rsia_abby
   script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuIdentifikasiPasien
+  script_location: etl_pipeline.scripts.fact.FgFactPenjualanBarang
+  partitionColumn: "id"
+  lowerBound: "1"
+  upperBound: "10000000"
+  numPartitions: 20
 
   read_conf:
-    document_history_list:
-      <<: *postgres_conf_prod
-      table: public.document_history_list
-      filter: > 
-        (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') 
-        and document_code = 'RM102'
-
-  write_conf:
-    mode: overwrite
-    schema:
-      - column_name: id
-        type: bigint
-        index: true
-      - column_name: no_rm
-        type: varchar(20)
-      - column_name: pasien
-        type: varchar(255)
-      - column_name: verifikasi
-        type: varchar(255)
-      - column_name: nama_verifikator
-        type: varchar(255)
-      - column_name: identifikasi_nama
-        type: varchar(10)
-      - column_name: identifikasi_tanggal_lahir
-        type: varchar(10)
-      - column_name: status
-        type: varchar(50)
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(3)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
-      - column_name: partition_date
-        type: date
-        index: true
-
-fg_fact_mutu_scp:
-  <<: *mysql_conf_mart
-  table: fg_fact_mutu_scp
-  schema: simrs_ums_mart
-  script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuScp
-
-  read_conf:
-    document_history_list:
-      <<: *postgres_conf_prod
-      table: public.document_history_list
-      filter: >
-        (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') 
-        and title IN (
-          'Laporan Operasi',
-          'Serah Terima Pasien Pre Operasi'
-        )
-
-  write_conf:
-    mode: overwrite
-    schema:
-      - column_name: id
-        type: bigint
-      - column_name: no_rm
-        type: varchar(50)
-      - column_name: nama_pasien
-        type: varchar(255)
-      - column_name: dokter_bedah
-        type: varchar(255)
-      - column_name: icd_x
-        type: varchar(20)
-      - column_name: diagnosa
-        type: text
-      - column_name: tanggal_operasi
-        type: date
-      - column_name: jam_asesmen
-        type: varchar(10)
-      - column_name: jam_operasi
-        type: varchar(10)
-      - column_name: selisih_menit
-        type: bigint
-      - column_name: status
-        type: varchar(50)
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
-      - column_name: partition_date
-        type: date
-        index: true
-
-fg_fact_mutu_rawat_jalan:
-  <<: *mysql_conf_mart
-  table: fg_fact_mutu_rawat_jalan
-  schema: simrs_ums_mart
-  script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuRawatJalan
-
-  read_conf:
-    dc_pendaftaran:
+    dc_penjualan:
       <<: *mysql_conf_prod
-      table: dc_pendaftaran
-      filter: >
-        substring(waktu_daftar,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_daftar,1,10) < '{~~~%Y-%m-%d:day=0~~~}' 
-        and lower(rawat) = 'jalan' 
-        and status not in ('Batal','Booking')
+      table: dc_penjualan
+      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_detail_penjualan:
+      <<: *mysql_conf_prod
+      table: dc_detail_penjualan
+      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_resep:
+      <<: *mysql_conf_prod
+      table: dc_resep
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_resep_bebas:
+      <<: *mysql_conf_prod
+      table: dc_resep_bebas
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
     dc_layanan_pendaftaran:
       <<: *mysql_conf_prod
       table: dc_layanan_pendaftaran
-      filter: >
-        substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
-        and status not in ('Batal','Belum')
-    dc_spesialisasi:
+      filter: "date(waktu) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_pendaftaran:
       <<: *mysql_conf_prod
-      table: dc_spesialisasi
-    dc_taskid_bpjs:
+      table: dc_pendaftaran
+      filter: "date(waktu_daftar) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_penjamin:
       <<: *mysql_conf_prod
-      table: dc_taskid_bpjs
-      filter: substring(waktu_rs,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_rs,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
-    dc_nakes:
+      table: dc_penjamin
+
+    fg_dim_pengemasan_barang:
+      <<: *mysql_conf_mart
+      table: fg_dim_pengemasan_barang
+
+    dc_stok:
       <<: *mysql_conf_prod
-      table: dc_nakes
-    dc_pegawai:
-      <<: *mysql_conf_prod
-      table: dc_pegawai
+      table: dc_stok
+      filter: "date(waktu) <= '{~~~%Y-%m-%d:day=0~~~}'"
 
   write_conf:
     mode: overwrite
     schema:
       - column_name: id
         type: bigint
-      - column_name: no_register
-        type: varchar(30)
-      - column_name: no_rm
-        type: varchar(10)
-      - column_name: nama_dokter
-        type: varchar(255)
-      - column_name: spesialisasi
-        type: varchar(255)
-      - column_name: waktu_task_3
-        type: timestamp
-      - column_name: waktu_task_4
-        type: timestamp
-      - column_name: selisih_menit
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp 
+      - column_name: id_layanan_pendaftaran
+        type: bigint 
+      - column_name: id_pasien
+        type: bigint 
+      - column_name: id_dokter
         type: bigint
-      - column_name: status
-        type: varchar(100)
-      - column_name: tahun
+      - column_name: id_penjualan
+        type: bigint
+      - column_name: jenis_layanan
+        type: varchar(50) 
+      - column_name: id_unit_layanan
         type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
+      - column_name: cara_bayar
+        type: varchar(50)
+      - column_name: id_penjamin
+        type: bigint
+      - column_name: id_kemasan
+        type: bigint
+      - column_name: id_barang_paket
+        type: bigint
+      - column_name: id_resep
+        type: bigint
+      - column_name: id_resep_bebas
+        type: bigint
+      - column_name: nobatch
+        type: varchar(50)
+      - column_name: id_unit
+        type: varchar(50)
+      - column_name: jumlah
+        type: decimal(16,2)
+      - column_name: hna
+        type: decimal(16,2)
+      - column_name: hpp
+        type: decimal(16,2)
+      - column_name: harga_jual
+        type: decimal(16,2)
       - column_name: partition_date
         type: date
-        index: true
+        index: true  
     options:
       batchsize: 1000
-      numPartitions: 20
+      numPartitions: 5
 
-fg_fact_mutu_visite_dokter:
+fg_fact_retur_barang:
   <<: *mysql_conf_mart
-  table: fg_fact_mutu_visite_dokter
-  schema: simrs_ums_mart
+  table: fg_fact_retur_barang
+  schema: mart_rsia_abby
   script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuVisiteDokter
+  script_location: etl_pipeline.scripts.fact.FgFactReturBarang
 
   read_conf:
-    document_history_list:
-      <<: *postgres_conf_prod
-      table: public.document_history_list
-      filter: >
-        (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and 
-        document_code = 'CPPT1' and
-        label = 'Rawat Inap'
-
-  write_conf:
-    mode: overwrite
-    schema:
-      - column_name: id
-        type: bigint
-      - column_name: no_rm
-        type: text
-      - column_name: pasien
-        type: varchar(255)
-      - column_name: klinik
-        type: varchar(255)
-      - column_name: dokter
-        type: varchar(255)
-      - column_name: tanggal_masuk
-        type: varchar(20)
-      - column_name: tanggal_visite
-        type: varchar(20)
-      - column_name: jam
-        type: varchar(10)
-      - column_name: pemeriksaan
-        type: text
-      - column_name: status
-        type: varchar(50)
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
-      - column_name: partition_date
-        type: date
-        index: true
-
-fg_staging_document_history_list:
-  <<: *mysql_conf_mart
-  table: fg_staging_document_history_list
-  schema: simrs_ums_mart
-  script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgStagingDocumentHistoryList
-
-  read_conf:
-    document_history_list:
-      <<: *postgres_conf_prod
-      table: public.document_history_list
-      filter: > 
-        (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and
-        title like '%Lab%' and document_code = 'UP'
-
-  write_conf:
-    mode: overwrite
-    schema:
-      - column_name: id
-        type: bigint
-      - column_name: created_time
-        type: timestamp
-      - column_name: urutan_lab
-        type: bigint
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
-      - column_name: partition_date
-        type: date
-        index: true
-
-fg_fact_mutu_hasil_lab_kritis:
-  <<: *mysql_conf_mart
-  table: fg_fact_mutu_hasil_lab_kritis
-  schema: simrs_ums_mart
-  script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuHasilLabKritis
-
-  read_conf:
-    document_history_list:
-      <<: *mysql_conf_mart
-      table: fg_staging_document_history_list
-      filter: >
-        substring(created_time,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
-    dc_laboratorium:
+    dc_retur_penjualan:
       <<: *mysql_conf_prod
-      table: dc_laboratorium
-      filter: >
-        substring(waktu_hasil,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_hasil,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
+      table: dc_retur_penjualan
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_detur_penjualan:
+      <<: *mysql_conf_prod
+      table: dc_detur_penjualan
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_layanan_pendaftaran:
+      <<: *mysql_conf_prod
+      table: dc_layanan_pendaftaran
+      filter: "substring(waktu, 1,10) <= '{~~~%Y-%m-%d:day=0~~~}'"
 
   write_conf:
     mode: overwrite
     schema:
       - column_name: id
         type: bigint
-      - column_name: doc_his_id
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp
+        index: true  
+      - column_name: id_layanan_pendaftaran
         type: bigint
-      - column_name: waktu_konfirm
-        type: timestamp
-      - column_name: waktu_hasil
-        type: timestamp
-      - column_name: waktu_unggah
-        type: timestamp
-      - column_name: selisih_menit
+        index: true  
+      - column_name: id_kemasan
         type: bigint
-      - column_name: status
-        type: varchar(50)
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
+        index: true  
+      - column_name: jumlah
+        type: decimal(10,2)
       - column_name: partition_date
         type: date
-        index: true
+        index: true  
+    options:
+      batchsize: 1000
+      numPartitions: 5
 
 fg_dim_pengemasan_barang:
-  <<: *mysql_conf_prod
-  write_database: simrs_ums_mart
+  <<: *mysql_conf_mart
+  write_database: mart_rsia_abby
   table: fg_dim_pengemasan_barang
-  schema: simrs_ums_mart
+  schema: mart_rsia_abby
   script_type: scala
   script_location: etl_pipeline.scripts.dimension.FgDimPengemasanBarang
 
@@ -343,21 +176,27 @@ fg_dim_pengemasan_barang:
     dc_barang:
       <<: *mysql_conf_prod
       table: dc_barang
+
     dc_kemasan_barang:
       <<: *mysql_conf_prod
       table: dc_kemasan_barang
+
     dc_sediaan:
       <<: *mysql_conf_prod
       table: dc_sediaan
+
     dc_golongan:
       <<: *mysql_conf_prod
       table: dc_golongan
+
     dc_kategori_barang:
       <<: *mysql_conf_prod
       table: dc_kategori_barang
+
     dc_barang_paket:
       <<: *mysql_conf_prod
       table: dc_barang_paket
+
     dc_satuan:
       <<: *mysql_conf_prod
       table: dc_satuan
@@ -391,58 +230,47 @@ fg_dim_pengemasan_barang:
       - column_name: satuan
         type: varchar(50)
       - column_name: hna
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: hpp
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: harga_jual
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_non_resep
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_resep
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: margin_resep_rajal
-        type: decimal(10,2)
+        type: decimal(16,2)
       - column_name: plus_ppn
-        type: decimal(10,2)
+        type: decimal(16,2)
     options:
       batchsize: 1000
       numPartitions: 5
 
-fg_agg_mutu_fornas:
+fg_dim_nakes:
   <<: *mysql_conf_mart
-  table: fg_agg_mutu_fornas
-  schema: simrs_ums_mart
+  write_database: mart_rsia_abby
+  table: fg_dim_nakes
+  schema: simrs_rsia_abby
   script_type: scala
-  script_location: etl_pipeline.scripts.agg.FgAggMutuFornas
+  script_location: etl_pipeline.scripts.dimension.FgDimNakes
 
   read_conf:
-    dc_penjualan:
+    dc_nakes:
       <<: *mysql_conf_prod
-      table: dc_penjualan
-      filter: substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
-    dc_detail_penjualan:
+      table: dc_nakes
+
+    dc_pegawai:
       <<: *mysql_conf_prod
-      table: dc_detail_penjualan
-      filter: substring(waktu,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
-    dc_users:
+      table: dc_pegawai
+
+    dc_profesi:
       <<: *mysql_conf_prod
-      table: dc_users
-    dc_group_users:
-      <<: *mysql_conf_prod
-      table: dc_group_users
-    dc_layanan_pendaftaran:
-      <<: *mysql_conf_prod
-      table: dc_layanan_pendaftaran
-    dc_pendaftaran:
-      <<: *mysql_conf_prod
-      table: dc_pendaftaran
-      filter: substring(waktu_daftar,1,10) >= '{~~~%Y-%m-01:day=45~~~}' and substring(waktu_daftar,1,10) < '{~~~%Y-%m-%d:day=0~~~}'
+      table: dc_profesi_nakes
+
     dc_spesialisasi:
       <<: *mysql_conf_prod
       table: dc_spesialisasi
-    fg_dim_pengemasan_barang:
-      <<: *mysql_conf_mart
-      table: fg_dim_pengemasan_barang
 
   write_conf:
     mode: overwrite
@@ -450,103 +278,289 @@ fg_agg_mutu_fornas:
       - column_name: id
         type: bigint
         constraint: primary_key,not_null
-      - column_name: tanggal_penjualan
-        type: date
-      - column_name: waktu
-        type: timestamp
-      - column_name: jenis_layanan
-        type: varchar(255)
-      - column_name: total_item
-        type: bigint
-      - column_name: total_fornas
-        type: bigint
-      - column_name: total_non_fornas
-        type: bigint
-      - column_name: persen_fornas
-        type: decimal(5,2)
-      - column_name: status
+      - column_name: nama
+        type: varchar(100)
+      - column_name: profesi
         type: varchar(50)
-        index: true
-      - column_name: keterangan
-        type: varchar(255)
-      - column_name: nama_obat_diluar_fornas
-        type: text
-      - column_name: nama_obat_fornas_null
-        type: text
-      - column_name: tahun
-        type: int
-        index: true
-      - column_name: triwulan
-        type: varchar(5)
-        index: true
-      - column_name: nama_bulan
-        type: varchar(20)
-        index: true
-      - column_name: partition_date
-        type: date
-        index: true
+      - column_name: spesialisasi
+        type: varchar(50)
     options:
       batchsize: 1000
-      numPartitions: 20
+      numPartitions: 5
 
-fg_fact_mutu_pasien_jatuh:
+fg_agg_rekap_penggunaan_barang:
   <<: *mysql_conf_mart
-  table: fg_fact_mutu_pasien_jatuh
-  schema: simrs_ums_mart
+  table: fg_agg_rekap_penggunaan_barang
+  schema: mart_rsia_abby
   script_type: scala
-  script_location: etl_pipeline.scripts.fact.FgFactMutuPasienJatuh
+  script_location: etl_pipeline.scripts.agg.FgAggRekapPenggunaanBarang
+  partitionColumn: "id"
+  lowerBound: "1"
+  upperBound: "10000000"
+  numPartitions: 20
 
   read_conf:
-    document_history_list:
-      <<: *postgres_conf_prod
-      table: public.document_history_list
-      filter: >
-        (substring(created_time,1,10) >= '{~~~%Y-%m-01:month=1~~~}' and substring(created_time,1,10) < '{~~~%Y-%m-%d:day=0~~~}') and
-        document_code IN (
-          'RM21a_K',
-          'RM21b_K',
-          'RM21c_K',
-          'RM101'
-        )
+    fg_fact_penjualan_barang:
+      <<: *mysql_conf_mart
+      table: fg_fact_penjualan_barang
+      filter: "partition_date between '{~~~%Y-%m-%d:month=13~~~}' and '{~~~%Y-%m-%d:day=1~~~}'"
+
+    fg_fact_retur_barang:
+      <<: *mysql_conf_mart
+      table: fg_fact_retur_barang
+
+    fg_dim_pengemasan_barang:
+      <<: *mysql_conf_mart
+      table: fg_dim_pengemasan_barang
+
+    dc_penjamin:
+      <<: *mysql_conf_prod
+      table: dc_penjamin
+
+    dc_spesialisasi:
+      <<: *mysql_conf_prod
+      table: dc_spesialisasi
+
+    fg_dim_nakes:
+      <<: *mysql_conf_prod
+      table: fg_dim_nakes
 
   write_conf:
     mode: overwrite
     schema:
       - column_name: id
         type: bigint
-      - column_name: no_rm
+        constraint: primary_key,not_null
+      - column_name: waktu
+        type: timestamp
+      - column_name: kategori
+        type: varchar(50)  
+      - column_name: nama_barang
+        type: varchar(1000)
+      - column_name: nobatch
         type: varchar(50)
-      - column_name: pasien
-        type: varchar(255)
-      - column_name: tanggal
-        type: varchar(50)
-      - column_name: bangsal
-        type: varchar(50)
-      - column_name: petugas
-        type: varchar(255)
-      - column_name: total_skor
-        type: int
-      - column_name: kategori_risiko
-        type: varchar(50)
-      - column_name: total_asesmen
-        type: int
-      - column_name: asesmen_awal
-        type: varchar(20)
-      - column_name: asesmen_ulang
-        type: varchar(20)
-      - column_name: intervensi
-        type: varchar(20)
-      - column_name: status
-        type: varchar(30)
-      - column_name: tahun
-        type: int
         index: true
+      - column_name: nama_dokter
+        type: varchar(100)
+      - column_name: spesialisasi
+        type: varchar(100)
+      - column_name: jenis_layanan
+        type: varchar(50)
+      - column_name: klinik
+        type: varchar(50)
+      - column_name: cara_bayar
+        type: varchar(50)
+      - column_name: penjamin
+        type: text
+      - column_name: jumlah
+        type: decimal(16,2)
+      - column_name: jumlah_retur
+        type: decimal(16,2)
+      - column_name: jumlah_pakai
+        type: decimal(16,2)
+      - column_name: hna
+        type: decimal(16,2)
+      - column_name: hpp
+        type: decimal(16,2)
+      - column_name: harga_jual
+        type: decimal(16,2)
+      - column_name: subtotal_hna
+        type: decimal(16,2)
+      - column_name: subtotal_hpp
+        type: decimal(16,2)
+      - column_name: subtotal_harga_jual
+        type: decimal(16,2)
+      - column_name: tahun
+        type: smallint
       - column_name: triwulan
         type: varchar(5)
-        index: true
       - column_name: nama_bulan
         type: varchar(20)
         index: true
       - column_name: partition_date
         type: date
         index: true
+
+    composite_indices:
+      - name: "idx_covering_semua"
+        columns: [
+          "tahun",
+          "triwulan",
+          "nama_bulan",
+          "jenis_layanan",
+          "cara_bayar",
+          "penjamin",
+          "kategori",
+          "klinik",
+          "partition_date",
+          "nama_barang(100)",
+          "jumlah",
+          "jumlah_retur",
+          "jumlah_pakai",
+          "subtotal_hna",
+          "subtotal_hpp",
+          "subtotal_harga_jual"
+        ]
+
+    options:
+      batchsize: 1000
+      numPartitions: 20
+
+fg_fact_pergerakan_stok:
+  <<: *mysql_conf_mart
+  table: fg_fact_pergerakan_stok
+  schema: mart_rsia_abby
+  script_type: scala
+  script_location: etl_pipeline.scripts.fact.FgFactPergerakanStok
+
+  read_conf:
+
+    dc_stok:
+      <<: *mysql_conf_prod
+      table: dc_stok
+      filter: "date(waktu) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_penerimaan:
+      <<: *mysql_conf_prod
+      table: dc_penerimaan
+      filter: "date(waktu) <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+    dc_supplier:
+      <<: *mysql_conf_prod
+      table: dc_supplier
+
+    fg_dim_pengemasan_barang:
+      <<: *mysql_conf_mart
+      table: fg_dim_pengemasan_barang
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+
+      - column_name: id_barang
+        type: bigint
+        index: true
+
+      - column_name: nama_barang
+        type: varchar(255)
+
+      - column_name: nobatch
+        type: varchar(100)
+        index: true
+
+      - column_name: transaksi
+        type: varchar(100)
+
+      - column_name: nama_supplier
+        type: varchar(255)
+
+      - column_name: waktu
+        type: timestamp
+
+      - column_name: masuk
+        type: decimal(16,2)
+
+      - column_name: keluar
+        type: decimal(16,2)
+
+      - column_name: stok_sesudah
+        type: decimal(16,2)
+
+      - column_name: ed
+        type: date
+
+      - column_name: total_masuk_kumulatif
+        type: decimal(16,2)
+
+      - column_name: total_kurang_kumulatif
+        type: decimal(16,2)
+
+      - column_name: sisa_stok_saat_ini
+        type: decimal(16,2)
+
+      - column_name: total_nilai_stok_bergerak
+        type: decimal(18,2)
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+    options:
+      batchsize: 1000
+      numPartitions: 5
+
+fg_fact_pergerakan_stok_bulanan:
+  <<: *mysql_conf_mart
+  table: fg_fact_pergerakan_stok_bulanan
+  schema: simrs_ums_mart
+  script_type: scala
+  script_location: etl_pipeline.scripts.agg.FgFactPergerakanStokBulanan
+
+  partitionColumn: "id_barang"
+  lowerBound: "1"
+  upperBound: "100000"
+  numPartitions: 10
+
+  read_conf:
+    fg_fact_pergerakan_stok:
+      <<: *mysql_conf_mart
+      table: fg_fact_pergerakan_stok
+      filter: "partition_date <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+      - column_name: id
+        type: bigint
+        constraint: primary_key,not_null
+
+      - column_name: id_barang
+        type: bigint
+        constraint: not_null
+        index: true
+
+      - column_name: nama_barang
+        type: varchar(255)
+
+      - column_name: jumlah_stok_terakhir
+        type: decimal(16,2)
+
+      - column_name: nilai_stok_terakhir
+        type: decimal(18,2)
+
+      - column_name: waktu
+        type: timestamp
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+    options:
+      batchsize: 5000
+      numPartitions: 10

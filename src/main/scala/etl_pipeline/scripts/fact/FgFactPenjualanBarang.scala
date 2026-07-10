@@ -107,7 +107,8 @@ object FgFactPenjualanBarang extends Transformer {
       .filter(dcPendaftaran("filter").toString)
       .select(
         col("id"),
-        col("id_pasien")
+        col("id_pasien"),
+        col("rawat")
       )
 
     val dfPengemasanBarang = spark.read
@@ -229,8 +230,17 @@ object FgFactPenjualanBarang extends Transformer {
 
     val dfFinal = dfJoin
       .filter(col("id").isNotNull)
+      .withColumn(
+        "total_pembulatan",
+        coalesce(col("total_pembulatan"), col("harga_jual"))
+      )
+      .withColumn(
+        "jenis_layanan",
+        when(trim(col("rawat")) === "Inap", "Rawat Inap")
+        .when(trim(col("rawat")) === "Jalan", "Rawat Jalan")
+        .otherwise("Penjualan Bebas")
+      )
       .withColumnRenamed("qty", "jumlah")
-      .withColumnRenamed("jenis", "jenis_layanan")
       .withColumn(
         "partition_date",
         substring(col("waktu"), 1, 10)
@@ -256,6 +266,7 @@ object FgFactPenjualanBarang extends Transformer {
         col("hna"),
         col("hpp"),
         col("harga_jual"),
+        col("total_pembulatan"),
         col("partition_date")
       )
 

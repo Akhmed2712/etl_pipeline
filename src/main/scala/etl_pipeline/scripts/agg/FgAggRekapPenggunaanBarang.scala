@@ -65,7 +65,8 @@ object FgAggRekapPenggunaanBarang extends Transformer {
         "hpp",
         "harga_jual",
         "jenis_layanan",
-        "cara_bayar"
+        "cara_bayar",
+        "total_pembulatan"
       )
       .agg(
         sum("jumlah").as("jumlah"),
@@ -216,6 +217,11 @@ object FgAggRekapPenggunaanBarang extends Transformer {
         col("harga_jual") * col("jumlah_pakai")
       )
       .withColumn(
+        "total_pembulatan",
+        when(col("cara_bayar") === "Tunai", col("total_pembulatan"))
+        .otherwise(col("harga_jual") * col("jumlah_pakai"))
+      )
+      .withColumn(
         "tahun",
         year(baseDate)
       )
@@ -238,6 +244,19 @@ object FgAggRekapPenggunaanBarang extends Transformer {
           .when(month(baseDate) === 11, "11-November")
           .otherwise("12-Desember")
       )
+      .withColumn(
+        "unit_layanan",
+        when(col("klinik") === null, col("jenis_layanan"))
+        .otherwise(col("klinik"))
+      )
+      .withColumn(
+        "cara_bayar",
+        coalesce(col("cara_bayar"), lit("Tunai"))
+      )
+      .withColumn(
+        "penjamin",
+        coalesce(col("penjamin"), lit("Umum/Tunai"))
+      )
       .select(
         col("id"),
         col("waktu"),
@@ -247,7 +266,7 @@ object FgAggRekapPenggunaanBarang extends Transformer {
         col("nama_dokter"),
         col("spesialisasi"),
         col("jenis_layanan"),
-        col("klinik"),
+        col("unit_layanan"),
         col("cara_bayar"),
         col("penjamin"),
         col("jumlah"),
@@ -259,6 +278,7 @@ object FgAggRekapPenggunaanBarang extends Transformer {
         col("subtotal_hna"),
         col("subtotal_hpp"),
         col("subtotal_harga_jual"),
+        col("total_pembulatan"),
         col("tahun"),
         col("triwulan"),
         col("nama_bulan"),

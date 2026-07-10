@@ -30,9 +30,19 @@ high_local: &high_local
   spark.driver.memory: 2g
   spark.executor.instances: 2 
 
-fg_fact_mutu_rawat_jalan:
+fg_agg_rekap_penggunaan_barang:
+  <<: *high_local
+  spark.app.name: fg_agg_rekap_penggunaan_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_penjualan_barang:
+  <<: *high
+  spark.app.name: fg_fact_penjualan_barang
+  spark.sql.shuffle.partitions: 10
+
+fg_dim_nakes:
   <<: *low
-  spark.app.name: fg_fact_mutu_rawat_jalan
+  spark.app.name: fg_dim_nakes
   spark.sql.shuffle.partitions: 10
 
 fg_dim_pengemasan_barang:
@@ -40,42 +50,7 @@ fg_dim_pengemasan_barang:
   spark.app.name: fg_dim_pengemasan_barang
   spark.sql.shuffle.partitions: 10
 
-fg_agg_mutu_fornas:
-  <<: *high_local
-  spark.app.name: fg_agg_mutu_fornas
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_kepatuhan_identifikasi_pasien:
+fg_fact_retur_barang:
   <<: *low
-  spark.app.name: fg_fact_mutu_kepatuhan_identifikasi_pasien
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_scp:
-  <<: *low
-  spark.app.name: fg_fact_mutu_scp
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_visite_dokter:
-  <<: *low
-  spark.app.name: fg_fact_mutu_visite_dokter
-  spark.sql.shuffle.partitions: 10
-
-fg_staging_document_history_list:
-  <<: *low
-  spark.app.name: fg_staging_document_history_list
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_hasil_lab_kritis:
-  <<: *low
-  spark.app.name: fg_fact_mutu_hasil_lab_kritis
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_pasien_jatuh:
-  <<: *low
-  spark.app.name: fg_fact_mutu_pasien_jatuh
-  spark.sql.shuffle.partitions: 10
-
-fg_fact_mutu_identifikasi_pasien:
-  <<: *low
-  spark.app.name: fg_fact_mutu_identifikasi_pasien
+  spark.app.name: fg_fact_retur_barang
   spark.sql.shuffle.partitions: 10
