@@ -126,6 +126,14 @@ def rekap_penggunaan_barang_flow(
             wait_for=[f1, f2]
         )
 
+        f4b = execute_spark_job.submit(
+            jar,
+            "fg_fact_pergerakan_stok",
+            "fg_fact_pergerakan_stok",
+            run_date,
+            wait_for=[f1]
+        )
+
         # =================================================
         # STAGE 3: AGG (final)
         # =================================================
@@ -137,7 +145,16 @@ def rekap_penggunaan_barang_flow(
             wait_for=[f1, f2, f3, f4]
         )
 
+        f5b = execute_spark_job.submit(
+            jar,
+            "fg_fact_pergerakan_stok_bulanan",
+            "fg_fact_pergerakan_stok_bulanan",
+            run_date,
+            wait_for=[f4b]
+        )
+
         f5.result()
+        f5b.result()
 
     logger.info("ALL DATES COMPLETED SUCCESSFULLY")
 
