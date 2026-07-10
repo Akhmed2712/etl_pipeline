@@ -3,7 +3,9 @@ package etl_pipeline.utils
 import java.io.{File, FileInputStream}
 import java.util.{Map => JMap}
 
-import org.yaml.snakeyaml.Yaml
+// Tambahkan import untuk LoaderOptions dan Constructor
+import org.yaml.snakeyaml.{Yaml, LoaderOptions}
+import org.yaml.snakeyaml.constructor.Constructor
 
 import scala.jdk.CollectionConverters._
 
@@ -22,16 +24,25 @@ object YamlLoader {
   def loadYamlKey(env: String, configType: String, key: String): Map[String, Any] = {
     val currentDir = System.getProperty("user.dir")
     val folder = new File(currentDir, s"catalogs/$env")
-    val yaml = new Yaml()
+    
+    val loaderOptions = new LoaderOptions()
+    loaderOptions.setMaxAliasesForCollections(500)
+    
+    val yaml = new Yaml(new Constructor(classOf[JMap[String, Any]], loaderOptions))
 
     folder.listFiles()
       .filter(f => f.getName.contains(configType) && f.getName.endsWith(".yml"))
       .flatMap { file =>
-        val raw = yaml.load[JMap[String, Any]](new FileInputStream(file))
-        if (raw != null && raw.containsKey(key))
-          Some(raw.get(key).asInstanceOf[JMap[String, Any]].asScala.toMap)
-        else
-          None
+        val stream = new FileInputStream(file)
+        try {
+          val raw = yaml.load[JMap[String, Any]](stream)
+          if (raw != null && raw.containsKey(key))
+            Some(raw.get(key).asInstanceOf[JMap[String, Any]].asScala.toMap)
+          else
+            None
+        } finally {
+          stream.close()
+        }
       }
       .headOption
       .getOrElse(throw new NoSuchElementException(
