@@ -153,8 +153,16 @@ def rekap_penggunaan_barang_flow(
             wait_for=[f4b]
         )
 
+        f6b = execute_spark_job.submit(
+            jar,
+            "fg_agg_abc_analysis",
+            "fg_agg_abc_analysis",
+            run_date,
+            wait_for=[f5b]
+        )
+
         f5.result()
-        f5b.result()
+        f6b.result()
 
     logger.info("ALL DATES COMPLETED SUCCESSFULLY")
 

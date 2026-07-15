@@ -26,12 +26,12 @@ fg_fact_penjualan_barang:
     dc_penjualan:
       <<: *mysql_conf_prod
       table: dc_penjualan
-      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_detail_penjualan:
       <<: *mysql_conf_prod
       table: dc_detail_penjualan
-      filter: "substring(waktu, 1, 10) = '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "substring(waktu, 1, 10) <= '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_resep:
       <<: *mysql_conf_prod
@@ -253,7 +253,7 @@ fg_dim_nakes:
   <<: *mysql_conf_mart
   write_database: mart_rsatturots
   table: fg_dim_nakes
-  schema: simrs_rsatturots
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.dimension.FgDimNakes
 
@@ -305,7 +305,7 @@ fg_agg_rekap_penggunaan_barang:
     fg_fact_penjualan_barang:
       <<: *mysql_conf_mart
       table: fg_fact_penjualan_barang
-      filter: "partition_date between '{~~~%Y-%m-%d:month=13~~~}' and '{~~~%Y-%m-%d:day=1~~~}'"
+      filter: "partition_date <= '{~~~%Y-%m-%d:day=0~~~}'"
 
     fg_fact_retur_barang:
       <<: *mysql_conf_mart
@@ -324,7 +324,7 @@ fg_agg_rekap_penggunaan_barang:
       table: dc_spesialisasi
 
     fg_dim_nakes:
-      <<: *mysql_conf_prod
+      <<: *mysql_conf_mart
       table: fg_dim_nakes
 
   write_conf:
@@ -347,8 +347,8 @@ fg_agg_rekap_penggunaan_barang:
       - column_name: spesialisasi
         type: varchar(100)
       - column_name: jenis_layanan
-        type: varchar(50)
-      - column_name: klinik
+        type: varchar(100)
+      - column_name: unit_layanan
         type: varchar(50)
       - column_name: cara_bayar
         type: varchar(50)
@@ -427,7 +427,7 @@ fg_fact_pergerakan_stok:
     dc_penerimaan:
       <<: *mysql_conf_prod
       table: dc_penerimaan
-      filter: "date(waktu) <= '{~~~%Y-%m-%d:day=0~~~}'"
+      filter: "tanggal <= '{~~~%Y-%m-%d:day=0~~~}'"
 
     dc_supplier:
       <<: *mysql_conf_prod
@@ -436,6 +436,7 @@ fg_fact_pergerakan_stok:
     fg_dim_pengemasan_barang:
       <<: *mysql_conf_mart
       table: fg_dim_pengemasan_barang
+      filter: "kategori_barang = 'Farmasi'"
 
   write_conf:
     mode: overwrite
@@ -452,6 +453,9 @@ fg_fact_pergerakan_stok:
 
       - column_name: nama_barang
         type: varchar(255)
+
+      - column_name: kategori
+        type: varchar(100)
 
       - column_name: nobatch
         type: varchar(100)
@@ -513,7 +517,7 @@ fg_fact_pergerakan_stok:
 fg_fact_pergerakan_stok_bulanan:
   <<: *mysql_conf_mart
   table: fg_fact_pergerakan_stok_bulanan
-  schema: simrs_ums_mart
+  schema: mart_rsatturots
   script_type: scala
   script_location: etl_pipeline.scripts.agg.FgFactPergerakanStokBulanan
 
@@ -544,17 +548,103 @@ fg_fact_pergerakan_stok_bulanan:
       - column_name: nama_barang
         type: varchar(255)
 
+      - column_name: nobatch
+        type: varchar(255)
+
+      - column_name: kategori
+        type: varchar(100)
+
       - column_name: jumlah_stok_terakhir
         type: decimal(16,2)
 
       - column_name: nilai_stok_terakhir
         type: decimal(18,2)
 
-      - column_name: waktu
-        type: timestamp
+      - column_name: aktif
+        type: boolean
+
+      - column_name: ed
+        type: date
 
       - column_name: tahun
         type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
+        index: true
+
+      - column_name: nama_bulan
+        type: varchar(20)
+        index: true
+
+      - column_name: partition_date
+        type: date
+        index: true
+
+    options:
+      batchsize: 5000
+      numPartitions: 10
+
+fg_agg_abc_analysis:
+  <<: *mysql_conf_mart
+
+  table: fg_agg_abc_analysis
+  schema: mart_rsatturots
+
+  script_type: scala
+  script_location: etl_pipeline.scripts.agg.FgAggAbcAnalysis
+
+  read_conf:
+    fg_fact_pergerakan_stok_bulanan:
+      <<: *mysql_conf_mart
+      database: mart_rsatturots
+      table: fg_fact_pergerakan_stok_bulanan
+      filter: "partition_date <= '{~~~%Y-%m-%d:day=0~~~}'"
+
+  write_conf:
+    mode: overwrite
+
+    schema:
+      - column_name: id_barang
+        type: bigint
+        constraint: not_null
+        index: true
+
+      - column_name: nama_barang
+        type: varchar(255)
+
+      - column_name: kategori
+        type: varchar(100)
+
+      - column_name: jumlah_stok_terakhir
+        type: decimal(16,2)
+
+      - column_name: nilai_stok_terakhir
+        type: decimal(18,2)
+
+      - column_name: total_nilai_stok
+        type: decimal(18,2)
+
+      - column_name: persentase_nilai
+        type: decimal(18,2)
+
+      - column_name: persentase_kumulatif
+        type: decimal(18,2)
+
+      - column_name: kategori_abc
+        type: varchar(100)
+
+      - column_name: ranking
+        type: int
+        index: true
+
+      - column_name: tahun
+        type: int
+        index: true
+
+      - column_name: triwulan
+        type: varchar(5)
         index: true
 
       - column_name: nama_bulan

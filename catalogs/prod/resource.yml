@@ -54,3 +54,18 @@ fg_fact_retur_barang:
   <<: *low
   spark.app.name: fg_fact_retur_barang
   spark.sql.shuffle.partitions: 10
+
+fg_fact_pergerakan_stok:
+  <<: *low
+  spark.app.name: fg_fact_pergerakan_stok
+  spark.sql.shuffle.partitions: 10
+
+fg_fact_pergerakan_stok_bulanan:
+  <<: *low
+  spark.app.name: fg_fact_pergerakan_stok_bulanan
+  spark.sql.shuffle.partitions: 10
+
+fg_agg_abc_analysis:
+  <<: *low
+  spark.app.name: fg_agg_abc_analysis
+  spark.sql.shuffle.partitions: 10

@@ -42,14 +42,14 @@ object FgFactPergerakanStokBulanan extends Transformer {
         getJdbcProps(confStok)
       )
       // Gunakan filter dari config yaml jika didefinisikan
-      .filter(fgFactPergerakanStok.getOrElse("filter", "1=1").toString)
+      .filter(fgFactPergerakanStok("filter").toString)
 
     // =====================================================
     // 3. WINDOW FUNCTION SPECIFICATION
     // =====================================================
     // Meniru logic MAX(id) per barang per periode tahun dan bulan
     val windowSpec = Window
-      .partitionBy(col("id_barang"), col("tahun"), col("nama_bulan"))
+      .partitionBy(col("id_barang"), col("nobatch"), col("tahun"), col("nama_bulan"))
       .orderBy(col("id").desc)
 
     // =====================================================
@@ -64,15 +64,23 @@ object FgFactPergerakanStokBulanan extends Transformer {
         "aktif",
         when(col("ed") < col("partition_date"), lit(false)).otherwise(lit(true))
       )
+      .withColumn(
+          "partition_date",
+          last_day(col("partition_date"))
+      )
       .select(
         col("id"),
         col("id_barang"),
         col("nama_barang"),
+        col("nobatch"),
+        col("kategori"),
+        col("unit"),
         col("sisa_stok_saat_ini").alias("jumlah_stok_terakhir"),
         col("total_nilai_stok_bergerak").alias("nilai_stok_terakhir"),
         col("aktif"),
         col("ed"),
         col("tahun"),
+        col("triwulan"),
         col("nama_bulan"),
         col("partition_date") // Membawa partition date asli untuk mempermudah management data mart
       )

@@ -22,6 +22,7 @@ object FgFactPergerakanStok extends Transformer {
   ): DataFrame = {
 
     val dcStok = env("dc_stok").asInstanceOf[Map[String, Any]]
+    val dcUnit = env("dc_unit").asInstanceOf[Map[String, Any]]
     val dcPenerimaan = env("dc_penerimaan").asInstanceOf[Map[String, Any]]
     val dcSupplier = env("dc_supplier").asInstanceOf[Map[String, Any]]
     val fgDimPengemasanBarang =
@@ -34,6 +35,13 @@ object FgFactPergerakanStok extends Transformer {
       .jdbc(jdbcConfig.url, s"${dcStok("database")}.${dcStok("table")}", props)
       .filter(dcStok("filter").toString)
 
+    val dfUnit = spark.read
+      .jdbc(jdbcConfig.url, s"${dcUnit("database")}.${dcUnit("table")}", props)
+      .select(
+        col("id"),
+        col("nama").as("unit")
+      )
+
     val dfPenerimaan = spark.read
       .jdbc(jdbcConfig.url, s"${dcPenerimaan("database")}.${dcPenerimaan("table")}", props)
       .filter(dcPenerimaan("filter").toString)
@@ -43,27 +51,31 @@ object FgFactPergerakanStok extends Transformer {
 
     val dfBarang = spark.read
       .jdbc(jdbcConfig.url, s"${fgDimPengemasanBarang("database")}.${fgDimPengemasanBarang("table")}", props)
+      .filter(fgDimPengemasanBarang("filter").toString)
       .groupBy("id_barang")
       .agg(
         first("nama_barang").alias("nama_barang"),
+        first("kategori").alias("kategori"),
         first("hpp").alias("hpp")
       )
 
     log.info(s"Source row count dc_stok: ${dfStok.count()}")
+    log.info(s"Source row count dc_unit: ${dfUnit.count()}")
     log.info(s"Source row count dc_penerimaan: ${dfPenerimaan.count()}")
     log.info(s"Source row count dc_supplier: ${dfSupplier.count()}")
     log.info(s"Source row count fg_dim_pengemasan_barang: ${dfBarang.count()}")
 
     val windowStok = Window
-      .partitionBy("id_barang", "nobatch")
+      .partitionBy("id_barang", "nobatch", "unit")
       .orderBy(col("waktu"), col("id"))
       .rowsBetween(Window.unboundedPreceding, Window.currentRow)
 
     val dfJoin = dfStok
-      .join(dfBarang, Seq("id_barang"), "left")
+      .join(dfBarang, Seq("id_barang"), "inner")
+      .join(dfUnit, dfStok("id_unit") === dfUnit("id"), "left")
       .join(dfPenerimaan, dfStok("id_penerimaan") === dfPenerimaan("id"), "left")
       .join(dfSupplier, dfPenerimaan("id_supplier") === dfSupplier("id"), "left")
-      .drop(dfPenerimaan("id"), dfSupplier("id"))
+      .drop(dfPenerimaan("id"), dfSupplier("id"), dfUnit("id"))
 
     val baseDate = to_date(col("waktu"))
 
@@ -97,7 +109,9 @@ object FgFactPergerakanStok extends Transformer {
         col("id"),
         col("id_barang"),
         col("nama_barang"),
+        col("kategori"),
         col("nobatch"),
+        col("unit"),
         col("transaksi"),
         col("nama").alias("nama_supplier"),
         col("waktu"),
