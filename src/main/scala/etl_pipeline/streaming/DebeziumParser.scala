@@ -2,100 +2,56 @@ package etl_pipeline.streaming
 
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 
 object DebeziumParser {
 
   /**
-    * Parse Debezium CDC message.
+    * Parse Debezium CDC message ketika value.converter.schemas.enable = false.
     *
-    * @param kafkaDf DataFrame hasil KafkaConsumer
-    * @param valueSchema Schema tabel (schema after/before)
+    * Format pesan Kafka (flat, tanpa wrapper "schema"/"payload"):
+    * {
+    *   "before": { ... } | null,
+    *   "after":  { ... } | null,
+    *   "source": { "db": ..., "table": ..., "file": ..., "pos": ..., "snapshot": ... },
+    *   "op": "c" | "u" | "d" | "r",
+    *   "ts_ms": 1234567890
+    * }
+    *
+    * PENTING: "before" dan "after" SENGAJA tidak di-typing di sini (tetap
+    * sebagai teks JSON mentah). Alasannya: struktur kolom tiap tabel beda-beda,
+    * dan parser ini harus tetap generik untuk tabel apapun tanpa modifikasi.
+    * Typing per tabel (mapping kolom & tipe data) dilakukan belakangan, di
+    * tahap Router — setelah kita tahu pesan ini milik tabel yang mana.
     */
-  def parse(
-      kafkaDf: DataFrame,
-      valueSchema: StructType
-  ): DataFrame = {
-
-    val debeziumSchema =
-      StructType(
-        Seq(
-          StructField(
-            "payload",
-            StructType(
-              Seq(
-                StructField(
-                  "before",
-                  valueSchema,
-                  true
-                ),
-                StructField(
-                  "after",
-                  valueSchema,
-                  true
-                ),
-                StructField(
-                  "op",
-                  StringType,
-                  true
-                ),
-                StructField(
-                  "ts_ms",
-                  LongType,
-                  true
-                ),
-                StructField(
-                  "source",
-                  StructType(
-                    Seq(
-                      StructField("db", StringType, true),
-                      StructField("table", StringType, true),
-                      StructField("file", StringType, true),
-                      StructField("pos", LongType, true),
-                      StructField("snapshot", StringType, true)
-                    )
-                  ),
-                  true
-                )
-              )
-            ),
-            true
-          )
-        )
-      )
+  def parse(kafkaDf: DataFrame): DataFrame = {
 
     kafkaDf
-      .withColumn(
-        "json",
-        from_json(
-          col("kafka_value"),
-          debeziumSchema
-        )
-      )
       .select(
         col("topic"),
         col("partition"),
         col("offset"),
         col("timestamp").alias("kafka_timestamp"),
 
-        col("json.payload.before").alias("before"),
-        col("json.payload.after").alias("after"),
+        // Tetap string JSON mentah — belum di-parse jadi struct
+        get_json_object(col("kafka_value"), "$.before").alias("before_json"),
+        get_json_object(col("kafka_value"), "$.after").alias("after_json"),
 
-        col("json.payload.op").alias("op"),
+        get_json_object(col("kafka_value"), "$.op").alias("op"),
 
-        col("json.payload.ts_ms").alias("event_ts"),
+        get_json_object(col("kafka_value"), "$.ts_ms")
+          .cast("long")
+          .alias("event_ts"),
 
-        col("json.payload.source.db").alias("database"),
+        get_json_object(col("kafka_value"), "$.source.db").alias("database"),
+        get_json_object(col("kafka_value"), "$.source.table").alias("table"),
+        get_json_object(col("kafka_value"), "$.source.file").alias("binlog_file"),
 
-        col("json.payload.source.table").alias("table"),
+        get_json_object(col("kafka_value"), "$.source.pos")
+          .cast("long")
+          .alias("binlog_position"),
 
-        col("json.payload.source.file").alias("binlog_file"),
-
-        col("json.payload.source.pos").alias("binlog_position"),
-
-        col("json.payload.source.snapshot")
+        get_json_object(col("kafka_value"), "$.source.snapshot")
           .alias("snapshot")
       )
   }
-
 }

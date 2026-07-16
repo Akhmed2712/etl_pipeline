@@ -1,5 +1,5 @@
 {
-  "name": "mysql-simrs-v3",
+  "name": "mysql-simrs-v4",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
     "tasks.max": "1",
@@ -11,7 +11,7 @@
 
     "database.server.id": "5401",
 
-    "topic.prefix": "_",
+    "topic.prefix": "simrs",
 
     "database.include.list": "farmagitechs",
 
@@ -20,6 +20,11 @@
     "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
     "schema.history.internal.kafka.topic": "schemahistory.dc_nakes",
 
-    "snapshot.mode": "initial"
+    "snapshot.mode": "initial",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
   }
 }

@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────
+# Schema registry untuk CDC. Satu top-level key = satu tabel.
+# Pola ini sengaja disamakan dengan write_conf.schema di catalog.yml
+# supaya konsisten dan gampang dibaca orang yang udah familiar
+# sama batch pipeline.
+# ─────────────────────────────────────────────────────────────
+
+dc_nakes:
+  primary_key: id
+  write_credentials_key: mysqlanalytics   # ganti sesuai key asli di credentials.yml kamu
+  write_database: analytics_mart          # ganti sesuai database tujuan
+  write_table: dc_nakes
+  columns:
+    - name: id
+      type: bigint
+    - name: id_pegawai
+      type: int
+    - name: kode_spesialisasi
+      type: string
+    - name: nama_spesialisasi
+      type: string
+    - name: tgl_mulai_praktek
+      type: int
+      logical_type: date_epoch_day
+    - name: nama_profesi
+      type: string
+
+# Tambahin tabel lain di sini kalau nanti table.include.list di
+# connector di-extend. Format sama persis.
