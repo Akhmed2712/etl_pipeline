@@ -17,3 +17,9 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % Test,
   "org.apache.spark" %% "spark-sql" % sparkVersion % Test
 )
+
+Compile / unmanagedSources / excludeFilter := new sbt.FileFilter {
+  def accept(f: File): Boolean = {
+    f.getPath.contains(s"${java.io.File.separator}streaming${java.io.File.separator}")
+  }
+}

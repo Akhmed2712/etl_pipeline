@@ -61,6 +61,7 @@ object FgAggMutuFarmasi extends Transformer {
         getJdbcProps(confResep)
       )
       .select("id", "id_layanan_pendaftaran", "jenis_resep")
+      .filter(dcResep("filter").toString)
 
     val confTaskId = readConfigs("dc_taskid_bpjs")
     val dfTaskId = spark.read
